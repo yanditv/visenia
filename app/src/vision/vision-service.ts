@@ -1,6 +1,6 @@
 /**
  * Servicio de Inferencia en Tiempo Real con MediaPipe Tasks Vision (RF-01, RF-02)
- * Procesa frames de video de la cámara para detectar Pose y Manos (21 landmarks).
+ * Procesa frames de video de la cámara para detectar Pose (2D y World 3D métrico) y Manos (21 landmarks).
  */
 import {
   FilesetResolver,
@@ -24,7 +24,7 @@ export class VisionService {
         'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
       );
 
-      // 1. Inicializar detector de Pose corporal
+      // 1. Inicializar detector de Pose corporal (genera landmarks normalizados y worldLandmarks métricos en 3D)
       this.poseLandmarker = await PoseLandmarker.createFromOptions(wasmFileset, {
         baseOptions: {
           modelAssetPath: '/models/pose_landmarker.task',
@@ -51,7 +51,7 @@ export class VisionService {
       });
 
       this.isReady = true;
-      console.log('[VisionService] Modelos de Pose y Manos cargados con éxito.');
+      console.log('[VisionService] Modelos de Pose (2D/World) y Manos cargados con éxito.');
     } catch (err) {
       console.error('[VisionService] Error al inicializar MediaPipe:', err);
       throw err;
@@ -71,7 +71,7 @@ export class VisionService {
     const result: HolisticFrameLandmarks = {};
     let encuadreValido = false;
 
-    // 1. Inferencia de Pose
+    // 1. Inferencia de Pose (Normalizada y World 3D métrica para VRM)
     if (this.poseLandmarker) {
       const poseResult = this.poseLandmarker.detectForVideo(video, timestamp);
       if (poseResult.landmarks && poseResult.landmarks.length > 0) {
@@ -83,8 +83,17 @@ export class VisionService {
           visibility: lm.visibility ?? 1.0
         }));
 
+        // pose_world (en metros, origen en centro de cadera) para retargeting VRM / Kalidokit
+        if (poseResult.worldLandmarks && poseResult.worldLandmarks.length > 0) {
+          result.poseWorld = poseResult.worldLandmarks[0].map((wlm) => ({
+            x: wlm.x,
+            y: wlm.y,
+            z: wlm.z,
+            visibility: wlm.visibility ?? 1.0
+          }));
+        }
+
         // Validación de encuadre básico:
-        // Hombro izquierdo (11), hombro derecho (12) y nariz (0) deben estar dentro del área de confort
         const nose = result.pose[0];
         const leftShoulder = result.pose[11];
         const rightShoulder = result.pose[12];
@@ -113,8 +122,6 @@ export class VisionService {
             visibility: 1.0
           }));
 
-          // Nota: En espejo frontal la mano reportada como "Left" en el sensor corresponde
-          // a la mano derecha del usuario o viceversa según el espejo
           if (handedness === 'Left') {
             result.leftHand = mappedPoints;
           } else {

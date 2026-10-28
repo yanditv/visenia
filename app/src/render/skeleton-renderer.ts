@@ -4,17 +4,20 @@
  */
 
 export interface LandmarkPoint {
-  x: number; // Normalizado 0.0 a 1.0
-  y: number; // Normalizado 0.0 a 1.0
+  x: number; // Normalizado 0.0 a 1.0 (o metros en pose_world)
+  y: number; // Normalizado 0.0 a 1.0 (o metros en pose_world)
   z?: number;
   visibility?: number;
 }
 
 export interface HolisticFrameLandmarks {
   pose?: LandmarkPoint[];
+  poseWorld?: LandmarkPoint[];
   leftHand?: LandmarkPoint[];
   rightHand?: LandmarkPoint[];
   face?: LandmarkPoint[];
+  blendshapes?: Record<string, number>;
+  vrmPoseOverride?: Record<string, [number, number, number, number]>;
 }
 
 // Conexiones de mano estándar de MediaPipe (21 puntos)
@@ -164,12 +167,19 @@ export class SkeletonRenderer {
       { x: 0.65 + wave, y: 0.35 + wave, visibility: 0.95 }  // 16: muñeca der
     ];
 
+    const poseWorld: LandmarkPoint[] = pose.map((pt) => ({
+      x: (pt.x - 0.5) * 1.5,
+      y: (0.5 - pt.y) * 1.5,
+      z: 0.0,
+      visibility: pt.visibility
+    }));
+
     const rightHand: LandmarkPoint[] = Array.from({ length: 21 }, (_, idx) => {
       const offsetX = 0.65 + wave + (idx % 5) * 0.015;
       const offsetY = 0.35 + wave + Math.floor(idx / 5) * 0.02;
       return { x: offsetX, y: offsetY, visibility: 0.95 };
     });
 
-    return { pose, rightHand };
+    return { pose, poseWorld, rightHand };
   }
 }
