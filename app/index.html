@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="description" content="Espejo de Práctica de Lengua de Señas - Viseña (Semana 0 / RF-01, RF-02)" />
+  <link rel="manifest" href="/manifest.json" />
+  <title>Viseña - Espejo de Señas (PWA Mínima)</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <div class="logo-area">
+        <h1>Viseña</h1>
+        <span class="badge">Semana 0 • RF-01 / RF-02</span>
+      </div>
+      <div class="hud-stats">
+        <span id="fps-display">FPS: --</span>
+        <span id="status-display" class="status-indicator">Iniciando cámara...</span>
+      </div>
+    </header>
+
+    <main class="mirror-container">
+      <div class="viewport-wrapper">
+        <video id="webcam-video" autoplay playsinline muted></video>
+        <canvas id="skeleton-canvas"></canvas>
+
+        <div id="encuadre-overlay" class="encuadre-overlay">
+          <div class="encuadre-box">
+            <span class="encuadre-tip">Ubica tu torso y manos dentro del área</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls-panel">
+        <button id="btn-toggle-camera" class="btn btn-primary">Encender Cámara</button>
+        <button id="btn-toggle-synthetic" class="btn btn-secondary">Modo Simulación (Spike)</button>
+        <div class="legend">
+          <span class="dot pose-dot"></span> Torso / Pose
+          <span class="dot hand-dot"></span> Manos (21 pts)
+          <span class="dot face-dot"></span> Rostro
+        </div>
+      </div>
+    </main>
+
+    <footer class="app-footer">
+      <small>Proyecto Viseña — Fondo INVENTA • Desarrollador B (Lucas) • PWA Espejo Digital</small>
+    </footer>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
