@@ -3,6 +3,7 @@
  */
 import { CameraService } from './camera/camera-service';
 import { SkeletonRenderer, HolisticFrameLandmarks } from './render/skeleton-renderer';
+import { VisionService } from './vision/vision-service';
 
 // Referencias del DOM
 const video = document.getElementById('webcam-video') as HTMLVideoElement;
@@ -15,6 +16,7 @@ const btnToggleSynthetic = document.getElementById('btn-toggle-synthetic') as HT
 
 const cameraService = new CameraService(video);
 const renderer = new SkeletonRenderer(canvas);
+const visionService = new VisionService();
 
 let isSimulating = false;
 let animationFrameId: number | null = null;
@@ -24,15 +26,19 @@ let currentFps = 0;
 
 // Ajuste dinámico de dimensiones de Canvas
 function syncCanvasSize() {
-  const rect = canvas.getBoundingClientRect();
-  renderer.resize(rect.width, rect.height);
+  if (video.videoWidth && video.videoHeight) {
+    renderer.resize(video.videoWidth, video.videoHeight);
+  } else {
+    const rect = canvas.getBoundingClientRect();
+    renderer.resize(rect.width, rect.height);
+  }
 }
 
 window.addEventListener('resize', syncCanvasSize);
 
-// Bucle de renderizado
+// Bucle de renderizado en tiempo real
 function animationLoop(timestamp: number) {
-  // Cálculo de FPS en vivo
+  // Cálculo de FPS
   frameCount++;
   if (timestamp - lastTimestamp >= 1000) {
     currentFps = Math.round((frameCount * 1000) / (timestamp - lastTimestamp));
@@ -49,10 +55,19 @@ function animationLoop(timestamp: number) {
     landmarks = renderer.generateSyntheticPose(timestamp);
     encuadreBox?.classList.add('valido');
   } else if (cameraService.isRunning()) {
-    // Si la cámara está activa sin modelo WASM pesado descargado aún en modo offline,
-    // renderizamos landmarks base o esperamos detección
-    landmarks = renderer.generateSyntheticPose(timestamp);
-    encuadreBox?.classList.add('valido');
+    if (visionService.getReadyStatus()) {
+      const detection = visionService.detect(video, timestamp);
+      landmarks = detection.landmarks;
+
+      if (detection.encuadreValido) {
+        encuadreBox?.classList.add('valido');
+      } else {
+        encuadreBox?.classList.remove('valido');
+      }
+    } else {
+      // Mientras cargan los modelos WASM
+      encuadreBox?.classList.remove('valido');
+    }
   } else {
     renderer.clear();
     encuadreBox?.classList.remove('valido');
@@ -60,6 +75,8 @@ function animationLoop(timestamp: number) {
 
   if (landmarks.pose || landmarks.rightHand || landmarks.leftHand) {
     renderer.render(landmarks);
+  } else {
+    renderer.clear();
   }
 
   animationFrameId = requestAnimationFrame(animationLoop);
@@ -78,18 +95,32 @@ btnToggleCamera.addEventListener('click', async () => {
       btnToggleCamera.classList.add('btn-primary');
       statusDisplay.textContent = 'Cámara detenida';
       statusDisplay.className = 'status-indicator';
+      renderer.clear();
+      encuadreBox?.classList.remove('valido');
     } else {
       isSimulating = false;
       btnToggleSynthetic.textContent = 'Modo Simulación (Spike)';
-      statusDisplay.textContent = 'Solicitando acceso...';
+      statusDisplay.textContent = 'Iniciando cámara...';
 
       await cameraService.start();
 
       btnToggleCamera.textContent = 'Apagar Cámara';
       btnToggleCamera.classList.remove('btn-primary');
       btnToggleCamera.classList.add('btn-secondary');
-      statusDisplay.textContent = 'Cámara Activa (60 FPS)';
-      statusDisplay.className = 'status-indicator ready';
+
+      statusDisplay.textContent = 'Cargando modelos MediaPipe...';
+      statusDisplay.className = 'status-indicator';
+
+      // Inicializar inferencia en GPU
+      try {
+        await visionService.init();
+        statusDisplay.textContent = 'Seguimiento Activo (GPU)';
+        statusDisplay.className = 'status-indicator ready';
+      } catch (modelErr) {
+        statusDisplay.textContent = 'Cámara activa (error al cargar modelo)';
+        statusDisplay.className = 'status-indicator error';
+        console.error(modelErr);
+      }
     }
   } catch (err: unknown) {
     const error = err as Error;
