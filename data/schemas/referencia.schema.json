@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://visenia.org/schemas/referencia.schema.json",
+  "title": "ReferenciaSena",
+  "description": "Contrato maestro para muestras de referencia de lengua de señas según ERS 6.1 (Tabla 6.1).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "glosa",
+    "unidad_tematica",
+    "mano_dominante",
+    "metadatos_grabacion",
+    "segmentacion",
+    "parametros_fonologicos",
+    "frames"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^ref-[a-z0-9-]+$"
+    },
+    "glosa": {
+      "type": "string",
+      "minLength": 1
+    },
+    "unidad_tematica": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 12
+    },
+    "dificultad": {
+      "type": "string",
+      "enum": ["facil", "intermedio", "avanzado"],
+      "default": "facil"
+    },
+    "mano_dominante": {
+      "type": "string",
+      "enum": ["derecha", "izquierda", "ambas"]
+    },
+    "metadatos_grabacion": {
+      "type": "object",
+      "required": ["fps", "total_frames", "duracion_ms", "anotador", "fecha_anotacion"],
+      "properties": {
+        "fps": { "type": "number", "minimum": 15 },
+        "total_frames": { "type": "integer", "minimum": 1 },
+        "duracion_ms": { "type": "number", "minimum": 100 },
+        "anotador": { "type": "string" },
+        "fecha_anotacion": { "type": "string", "format": "date-time" }
+      }
+    },
+    "segmentacion": {
+      "type": "object",
+      "required": ["frame_inicio_sena", "frame_fin_sena"],
+      "properties": {
+        "frame_inicio_preparacion": { "type": "integer", "minimum": 0 },
+        "frame_inicio_sena": { "type": "integer", "minimum": 0 },
+        "frame_fin_sena": { "type": "integer", "minimum": 0 },
+        "frame_retorno": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "parametros_fonologicos": {
+      "type": "object",
+      "description": "Anotación de los 5 parámetros formativos del signo realizada por el especialista.",
+      "required": [
+        "queirema_configuracion",
+        "kinema_orientacion",
+        "toponema_ubicacion",
+        "kinesema_movimiento",
+        "prosoponema_no_manual"
+      ],
+      "properties": {
+        "queirema_configuracion": {
+          "type": "object",
+          "description": "Configuración de la forma de la(s) mano(s)",
+          "properties": {
+            "codigo_forma": { "type": "string" },
+            "descripcion": { "type": "string" },
+            "tolerancia_grados": { "type": "number", "default": 20 }
+          }
+        },
+        "kinema_orientacion": {
+          "type": "object",
+          "description": "Orientación de la palma y vector de dirección",
+          "properties": {
+            "vector_palma": {
+              "type": "array",
+              "items": { "type": "number" },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "tolerancia_grados": { "type": "number", "default": 25 }
+          }
+        },
+        "toponema_ubicacion": {
+          "type": "object",
+          "description": "Zona corporal o espacial donde se articula el signo",
+          "properties": {
+            "zona_corporal": {
+              "type": "string",
+              "enum": [
+                "neutro_espacio",
+                "cabeza",
+                "frente",
+                "pecho",
+                "barbilla",
+                "hombro",
+                "mano_base"
+              ]
+            },
+            "tolerancia_radio": { "type": "number", "default": 0.15 }
+          }
+        },
+        "kinesema_movimiento": {
+          "type": "object",
+          "description": "Trayectoria, velocidad y repetición del movimiento",
+          "properties": {
+            "tipo_movimiento": {
+              "type": "string",
+              "enum": ["rectilineo", "curvo", "circular", "ondulatorio", "estatico"]
+            },
+            "repeticiones": { "type": "integer", "minimum": 0, "default": 0 }
+          }
+        },
+        "prosoponema_no_manual": {
+          "type": "object",
+          "description": "Expresiones faciales y gestos corporales no manuales",
+          "properties": {
+            "requerido": { "type": "boolean", "default": false },
+            "blendshapes_clave": {
+              "type": "object",
+              "additionalProperties": { "type": "number" }
+            }
+          }
+        }
+      }
+    },
+    "frames": {
+      "type": "array",
+      "description": "Secuencia de landmarks 3D normalizados capturados con MediaPipe Holistic",
+      "items": {
+        "type": "object",
+        "required": ["frame_idx", "timestamp_ms"],
+        "properties": {
+          "frame_idx": { "type": "integer", "minimum": 0 },
+          "timestamp_ms": { "type": "number", "minimum": 0 },
+          "pose": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["x", "y", "z"],
+              "properties": {
+                "x": { "type": "number" },
+                "y": { "type": "number" },
+                "z": { "type": "number" },
+                "visibility": { "type": "number" }
+              }
+            }
+          },
+          "mano_derecha": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["x", "y", "z"],
+              "properties": {
+                "x": { "type": "number" },
+                "y": { "type": "number" },
+                "z": { "type": "number" }
+              }
+            }
+          },
+          "mano_izquierda": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["x", "y", "z"],
+              "properties": {
+                "x": { "type": "number" },
+                "y": { "type": "number" },
+                "z": { "type": "number" }
+              }
+            }
+          },
+          "rostro": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["x", "y", "z"],
+              "properties": {
+                "x": { "type": "number" },
+                "y": { "type": "number" },
+                "z": { "type": "number" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

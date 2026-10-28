@@ -1,0 +1,8 @@
+node_modules
+dist
+build
+coverage
+package-lock.json
+deploy/pgdata
+deploy/caddy_data
+deploy/caddy_config
