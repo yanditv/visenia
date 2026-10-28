@@ -1,7 +1,6 @@
 # Viseña (VISPROY)
 
 > **Plataforma Educativa y de Práctica Asistida de Lengua de Señas con Espejo Digital y Avatar 3D**  
-> Proyecto financiado por el fondo **INVENTA** y sujeto a declaración de invención y trazabilidad de requerimientos.
 
 ---
 
