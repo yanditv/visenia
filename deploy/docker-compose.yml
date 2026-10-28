@@ -1,0 +1,53 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: visenia-caddy-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+  api:
+    build:
+      context: ../server
+      dockerfile: Dockerfile
+    container_name: visenia-fastapi-backend
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-visenia}:${POSTGRES_PASSWORD:-visenia_secret}@db:5432/${POSTGRES_DB:-visenia_db}
+      - ENVIRONMENT=development
+      - PORT=8000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  db:
+    image: postgres:16-alpine
+    container_name: visenia-postgres-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-visenia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-visenia_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-visenia_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-visenia} -d ${POSTGRES_DB:-visenia_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
