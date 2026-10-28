@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://visenia.org/schemas/ejecucion.schema.json",
+  "title": "EjecucionUsuario",
+  "description": "Contrato para capturas y veredictos de ejecución de señas por parte del usuario según ERS 6.2 (Tabla 6.2).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id_ejecucion",
+    "id_referencia",
+    "timestamp_utc",
+    "modo",
+    "diagnostico_tecnico",
+    "senales_segmentacion",
+    "resultado",
+    "frames_ejecucion"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "id_ejecucion": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "id_referencia": {
+      "type": "string",
+      "pattern": "^ref-[a-z0-9-]+$"
+    },
+    "codigo_participante": {
+      "type": ["string", "null"],
+      "description": "Identificador seudónimo (RF-33) o null si es modo libre/anónimo."
+    },
+    "timestamp_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "modo": {
+      "type": "string",
+      "enum": ["practica_libre", "investigacion_pin", "kiosco"]
+    },
+    "diagnostico_tecnico": {
+      "type": "object",
+      "required": ["fps_promedio", "latencia_veredicto_ms", "calidad_encuadre"],
+      "properties": {
+        "fps_promedio": { "type": "number", "minimum": 0 },
+        "latencia_veredicto_ms": { "type": "number", "minimum": 0 },
+        "calidad_encuadre": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "senales_segmentacion": {
+      "type": "object",
+      "required": ["timestamp_encuadre_valido", "timestamp_inicio_sena", "timestamp_fin_sena"],
+      "properties": {
+        "timestamp_encuadre_valido": { "type": "number" },
+        "timestamp_inicio_sena": { "type": "number" },
+        "timestamp_fin_sena": { "type": "number" }
+      }
+    },
+    "resultado": {
+      "type": "object",
+      "required": ["puntaje_global", "estrellas", "veredicto_aprobado", "parametros_evaluados"],
+      "properties": {
+        "puntaje_global": { "type": "number", "minimum": 0, "maximum": 100 },
+        "estrellas": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "veredicto_aprobado": { "type": "boolean" },
+        "parametros_evaluados": {
+          "type": "object",
+          "required": [
+            "queirema_configuracion",
+            "kinema_orientacion",
+            "toponema_ubicacion",
+            "kinesema_movimiento",
+            "prosoponema_no_manual"
+          ],
+          "properties": {
+            "queirema_configuracion": { "$ref": "#/$defs/EstadoParametro" },
+            "kinema_orientacion": { "$ref": "#/$defs/EstadoParametro" },
+            "toponema_ubicacion": { "$ref": "#/$defs/EstadoParametro" },
+            "kinesema_movimiento": { "$ref": "#/$defs/EstadoParametro" },
+            "prosoponema_no_manual": { "$ref": "#/$defs/EstadoParametro" }
+          }
+        }
+      }
+    },
+    "frames_ejecucion": {
+      "type": "array",
+      "description": "Landmarks temporales capturados durante el gesto (sin video directo, privacidad estricta).",
+      "items": {
+        "type": "object",
+        "required": ["frame_idx", "timestamp_ms"],
+        "properties": {
+          "frame_idx": { "type": "integer" },
+          "timestamp_ms": { "type": "number" },
+          "pose": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["x", "y", "z"],
+              "properties": {
+                "x": { "type": "number" },
+                "y": { "type": "number" },
+                "z": { "type": "number" },
+                "visibility": { "type": "number" }
+              }
+            }
+          },
+          "mano_derecha": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["x", "y", "z"],
+              "properties": {
+                "x": { "type": "number" },
+                "y": { "type": "number" },
+                "z": { "type": "number" }
+              }
+            }
+          },
+          "mano_izquierda": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["x", "y", "z"],
+              "properties": {
+                "x": { "type": "number" },
+                "y": { "type": "number" },
+                "z": { "type": "number" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "EstadoParametro": {
+      "type": "object",
+      "required": ["estado", "desviacion"],
+      "properties": {
+        "estado": {
+          "type": "string",
+          "enum": ["verde", "amarillo", "rojo"]
+        },
+        "desviacion": {
+          "type": "number",
+          "description": "Distancia o error relativo respecto a la referencia (0.0 = perfecto)."
+        },
+        "mensaje_feedback": {
+          "type": "string",
+          "description": "Texto accesible breve para sugerencia de corrección (RF-19)."
+        }
+      }
+    }
+  }
+}
