@@ -1,0 +1,66 @@
+# Logs & Runtimes
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Node / JS / TS
+node_modules/
+dist/
+build/
+.cache/
+coverage/
+.turbo/
+.eslintcache
+
+# Python / FastAPI
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Data & Database volumes
+*.sqlite
+*.sqlite3
+*.db
+*.parquet
+*.jsonl
+deploy/pgdata/
+deploy/caddy_data/
+deploy/caddy_config/
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.cert
+
+# Operating System & Editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
