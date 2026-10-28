@@ -1,0 +1,27 @@
+{
+    # Administracion y certificados internos para desarrollo local HTTPS (ERS 3.4)
+    local_certs
+}
+
+localhost, visenia.local {
+    tls internal
+
+    # Proxy para API backend FastAPI
+    handle /api/* {
+        reverse_proxy api:8000
+    }
+
+    # Documentacion OpenAPI
+    handle /docs* {
+        reverse_proxy api:8000
+    }
+
+    handle /openapi.json {
+        reverse_proxy api:8000
+    }
+
+    # Proxy para frontend PWA o respuesta por defecto
+    handle {
+        respond "Viseña HTTPS Gateway Activo - Entorno de Laboratorio (ERS 3.4)" 200
+    }
+}
