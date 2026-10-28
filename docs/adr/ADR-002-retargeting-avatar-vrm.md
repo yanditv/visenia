@@ -1,47 +1,44 @@
 # ADR-002: Retargeting y Articulación del Avatar 3D VRM
 
-- **Estado:** Aprobado
+- **Estado:** Aprobado (Revisión v1.1)
 - **Fecha:** 2026-10-27
 - **Autor:** Desarrollador B (Lucas) / Coordinado con Desarrollador A (Mateo Pacheco)
-- **Requerimiento / Contexto:** ERS 8.1 / RF-42 (Sec. 7) / Three.js / @pixiv/three-vrm
+- **Requerimiento / Contexto:** ERS 8.1 / RF-42 (Sec. 7) / Three.js / @pixiv/three-vrm / Blender
 
 ---
 
 ## 1. Contexto y Problema
 
-Para la enseñanza interactiva y el catálogo de señas (RF-07, RF-42), se requiere un tutor virtual tridimensional capaz de:
-1. Articular con alta fidelidad motriz las manos (21 puntos por mano, separación precisa de dedos para el queirema).
-2. Reproducir rotaciones fluidas de hombros, codos y muñecas (kinesema y toponema).
-3. Mostrar expresiones faciales coherentes (prosoponema).
-4. Ejecutarse a $\ge 30$ FPS en navegadores web sin requerir motores pesados de escritorio (Unity o Unreal).
+Para la enseñanza interactiva y el catálogo de señas (RF-07, RF-42), el tutor virtual tridimensional debe:
+1. Mapear de forma realista las rotaciones de brazos, hombros y columna desde las capturas de MediaPipe.
+2. Animar los dedos independientes (21 landmarks por mano) para formar la configuración manual (queirema).
+3. Interpretar blendshapes faciales para las expresiones fonológicas (prosoponema).
+4. Resolver oclusiones críticas (cuando una mano se cruza frente a otra o tapa los dedos) mediante refinamiento manual asistido por Blender (Sprint 5 / Lote 3).
 
 ---
 
 ## 2. Decisión
 
-Se adopta el formato abierto **VRM (VRM 1.0 / glTF 2.0 extendido para humanoid)** junto con la biblioteca **`@pixiv/three-vrm`** montada sobre **Three.js** en el frontend PWA.
+Se consolida la integración entre Three.js, `@pixiv/three-vrm` y los datos maestros de referencia:
 
-### Elementos Arquitecturales:
-1. **Modelo Base (`viseña.vrm`):**
-   - Creado en VRoid Studio con topología anatómica adaptada a lengua de señas (malla limpia en falanges y rostro).
-2. **Jerarquía de Retargeting Articular:**
-   - Mapeo de vectores 3D desde los landmarks normalizados de referencia hacia los nodos de huesos normalizados de VRM (`VRMHumanBoneName`):
-     - `RightUpperArm`, `RightLowerArm`, `RightHand`.
-     - Falanges de dedos: `RightThumbMetacarpal`, `RightThumbProximal`, `RightThumbDistal`, `RightIndexProximal`, etc.
-   - Rotaciones calculadas mediante cuaterniones relativos para evitar bloqueos de cardán (*gimbal lock*).
-3. **Blendshapes para Expresión No Manual:**
-   - Uso de canales morfológicos VRM (`happy`, `blink`, `neutral`, `aa`) activados de forma sincronizada con las marcas temporales del gesto.
-4. **Optimización WebGL:**
-   - Limpieza automática de vértices y articulaciones redundantes con `VRMUtils.removeUnnecessaryVertices` y `VRMUtils.deepDispose` al desmontar.
+### 1. Insumos Cinemáticos Duales:
+- El solver cinemático (ej. Kalidokit o motor interno Three.js) consume simultáneamente:
+  - `pose_world`: Coordenadas métricas en 3D para resolver la orientación espacial absoluta de huesos claviculares, hombros y codos.
+  - `pose`: Coordenadas normalizadas proyectadas para calibrar la perspectiva de la cámara respecto al avatar.
+  - `mano_derecha` / `mano_izquierda`: Landmarks de las 21 articulaciones manuales para orientar metacarpianos y falanges.
+
+### 2. Prioridad de Poses Corregidas (`vrm_pose_override`):
+- Durante la actualización de cada fotograma en `VrmAvatarViewer`:
+  $$\text{Rotación Hueso} = \begin{cases} \mathbf{q}_{\text{override}} & \text{si } \text{bone} \in \text{vrm\_pose\_override} \\ \text{Solver}(\text{pose\_world}, \text{manos}) & \text{en caso contrario} \end{cases}$$
+- Esto permite al equipo 3D corregir en Blender señas de contacto estrecho o cruce de manos sin alterar el algoritmo base.
+
+### 3. Expresión Facial Mediante Shape Keys:
+- Los valores de `blendshapes_rostro` se aplican directamente sobre `vrm.expressionManager.setValue(nombre, valor)`, permitiendo expresiones continuas y ligeras sin sobrecarga de vértices.
 
 ---
 
 ## 3. Consecuencias
 
 ### Positivas:
-- **Portabilidad Web Total:** Renderizado nativo en WebGL dentro de la PWA, compatible con Chrome/Chromium en Windows, Linux y Android (RNF-14).
-- **Separación de Responsabilidades:** El modelo 3D estético es intercambiable (ropa, estilo) sin modificar la cinemática de los datos de referencia en JSON.
-- **Rendimiento Comprobado:** Spike técnico arrojó $\ge 60$ FPS estables en rendering de Three.js.
-
-### Negativas / Mitigaciones:
-- Tamaño de descarga inicial del archivo `.vrm` (~10 a 15 MB). Mitigación: compresión Draco / Meshopt y almacenamiento en caché persistente con Cache Storage / IndexedDB en la PWA.
+- **Flujo Híbrido Robusto:** Total soporte para captura automática con MediaPipe combinada con ajustes finos de artista en Blender (RF-42).
+- **Rendimiento Estable:** La cinemática basada en cuaterniones y blendshapes mantiene un costo de cómputo mínimo, asegurando $\ge 60$ FPS en la PWA.

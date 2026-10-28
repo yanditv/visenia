@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://visenia.org/schemas/referencia.schema.json",
   "title": "ReferenciaSena",
-  "description": "Contrato maestro para muestras de referencia de lengua de señas según ERS 6.1 (Tabla 6.1).",
+  "description": "Contrato maestro para muestras de referencia de lengua de señas según ERS 6.1 (Tabla 6.1), optimizado para retargeting VRM (pose_world), blendshapes faciales y overrides de Blender (RF-42).",
   "type": "object",
   "required": [
     "schema_version",
@@ -18,7 +18,7 @@
   "properties": {
     "schema_version": {
       "type": "string",
-      "const": "1.0.0"
+      "const": "1.1.0"
     },
     "id": {
       "type": "string",
@@ -125,6 +125,7 @@
             "requerido": { "type": "boolean", "default": false },
             "blendshapes_clave": {
               "type": "object",
+              "description": "Coeficientes objetivo de Shape Keys (ej. browInnerUp, jawOpen) para evaluación y VRoid",
               "additionalProperties": { "type": "number" }
             }
           }
@@ -133,61 +134,74 @@
     },
     "frames": {
       "type": "array",
-      "description": "Secuencia de landmarks 3D normalizados capturados con MediaPipe Holistic",
-      "items": {
-        "type": "object",
-        "required": ["frame_idx", "timestamp_ms"],
-        "properties": {
-          "frame_idx": { "type": "integer", "minimum": 0 },
-          "timestamp_ms": { "type": "number", "minimum": 0 },
-          "pose": {
+      "description": "Secuencia temporal de fotogramas capturados",
+      "items": { "$ref": "#/$defs/FrameCaptura" }
+    }
+  },
+  "$defs": {
+    "Punto3D": {
+      "type": "object",
+      "required": ["x", "y", "z"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" }
+      }
+    },
+    "Punto3DVisibilidad": {
+      "type": "object",
+      "required": ["x", "y", "z"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" },
+        "visibility": { "type": "number" }
+      }
+    },
+    "FrameCaptura": {
+      "type": "object",
+      "required": ["frame_idx", "timestamp_ms"],
+      "properties": {
+        "frame_idx": { "type": "integer", "minimum": 0 },
+        "timestamp_ms": { "type": "number", "minimum": 0 },
+        "pose": {
+          "description": "33 landmarks normalizados [0.0, 1.0] para render en canvas 2D",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Punto3DVisibilidad" }
+        },
+        "pose_world": {
+          "description": "33 landmarks en metros reales (origen en centro de cadera) requeridos por three-vrm / Kalidokit",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Punto3DVisibilidad" }
+        },
+        "mano_derecha": {
+          "description": "21 landmarks normalizados de mano derecha",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Punto3D" }
+        },
+        "mano_izquierda": {
+          "description": "21 landmarks normalizados de mano izquierda",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Punto3D" }
+        },
+        "blendshapes_rostro": {
+          "description": "Mapa de coeficientes ARKit/MediaPipe (0.0 a 1.0) para animar Shape Keys de VRoid/Blender y evaluar prosoponema",
+          "type": "object",
+          "additionalProperties": { "type": "number" }
+        },
+        "rostro": {
+          "description": "Opcional: subconjunto de puntos faciales {x,y,z} solo si el motor de Mateo no usa blendshapes",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Punto3D" }
+        },
+        "vrm_pose_override": {
+          "description": "Opcional (RF-42): Rotaciones en cuaterniones [x,y,z,w] exportadas desde Blender para corregir oclusiones de MediaPipe",
+          "type": ["object", "null"],
+          "additionalProperties": {
             "type": "array",
-            "items": {
-              "type": "object",
-              "required": ["x", "y", "z"],
-              "properties": {
-                "x": { "type": "number" },
-                "y": { "type": "number" },
-                "z": { "type": "number" },
-                "visibility": { "type": "number" }
-              }
-            }
-          },
-          "mano_derecha": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": ["x", "y", "z"],
-              "properties": {
-                "x": { "type": "number" },
-                "y": { "type": "number" },
-                "z": { "type": "number" }
-              }
-            }
-          },
-          "mano_izquierda": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": ["x", "y", "z"],
-              "properties": {
-                "x": { "type": "number" },
-                "y": { "type": "number" },
-                "z": { "type": "number" }
-              }
-            }
-          },
-          "rostro": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": ["x", "y", "z"],
-              "properties": {
-                "x": { "type": "number" },
-                "y": { "type": "number" },
-                "z": { "type": "number" }
-              }
-            }
+            "items": { "type": "number" },
+            "minItems": 4,
+            "maxItems": 4
           }
         }
       }
