@@ -102,7 +102,15 @@
           "properties": {
             "zona_corporal": {
               "type": "string",
-              "enum": ["neutro_espacio", "cabeza", "frente", "pecho", "barbilla", "hombro", "mano_base"]
+              "enum": [
+                "neutro_espacio",
+                "cabeza",
+                "frente",
+                "pecho",
+                "barbilla",
+                "hombro",
+                "mano_base"
+              ]
             },
             "tolerancia_radio": { "type": "number", "default": 0.15 }
           }
