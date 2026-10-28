@@ -1,6 +1,9 @@
 /**
  * Renderizador de Esqueleto 2D en Canvas - Viseña (RF-02)
- * Dibuja los puntos clave (landmarks) y conexiones óseas de MediaPipe Holistic.
+ * Dibuja los puntos clave (landmarks) y conexiones óseas de MediaPipe Holistic:
+ * - Pose superior (torso, hombros, brazos)
+ * - Manos (21 landmarks y falanges) con unión a muñecas
+ * - Contorno facial (cejas, ojos, labios) para expresión prosoponémica
  */
 
 export interface LandmarkPoint {
@@ -75,28 +78,57 @@ export class SkeletonRenderer {
     const w = this.canvas.width;
     const h = this.canvas.height;
 
-    // 1. Renderizar Pose (Torso y Brazos)
+    // 1. Renderizar Rostro (Contorno y Expresión)
+    if (landmarks.face && landmarks.face.length > 0) {
+      this.drawPoints(landmarks.face, '#f472b6', 2.5, w, h);
+    }
+
+    // 2. Renderizar Pose (Torso y Brazos)
     if (landmarks.pose && landmarks.pose.length > 0) {
       this.drawConnections(landmarks.pose, POSE_UPPER_CONNECTIONS, '#38bdf8', 3, w, h);
       this.drawPoints(landmarks.pose, '#0284c7', 5, w, h, [0, 11, 12, 13, 14, 15, 16]);
+
+      // Conexión dinámica antebrazo a carpo de mano izquierda
+      if (landmarks.leftHand && landmarks.leftHand.length === 21 && landmarks.pose[15]) {
+        this.drawDirectLine(landmarks.pose[15], landmarks.leftHand[0], '#38bdf8', 2.5, w, h);
+      }
+
+      // Conexión dinámica antebrazo a carpo de mano derecha
+      if (landmarks.rightHand && landmarks.rightHand.length === 21 && landmarks.pose[16]) {
+        this.drawDirectLine(landmarks.pose[16], landmarks.rightHand[0], '#38bdf8', 2.5, w, h);
+      }
     }
 
-    // 2. Renderizar Mano Izquierda
+    // 3. Renderizar Mano Izquierda
     if (landmarks.leftHand && landmarks.leftHand.length === 21) {
       this.drawConnections(landmarks.leftHand, HAND_CONNECTIONS, '#4ade80', 2, w, h);
-      this.drawPoints(landmarks.leftHand, '#16a34a', 4, w, h);
+      this.drawPoints(landmarks.leftHand, '#16a34a', 3.5, w, h);
     }
 
-    // 3. Renderizar Mano Derecha
+    // 4. Renderizar Mano Derecha
     if (landmarks.rightHand && landmarks.rightHand.length === 21) {
       this.drawConnections(landmarks.rightHand, HAND_CONNECTIONS, '#4ade80', 2, w, h);
-      this.drawPoints(landmarks.rightHand, '#16a34a', 4, w, h);
+      this.drawPoints(landmarks.rightHand, '#16a34a', 3.5, w, h);
     }
+  }
 
-    // 4. Renderizar Rostro básico
-    if (landmarks.face && landmarks.face.length > 0) {
-      this.drawPoints(landmarks.face, '#f472b6', 2, w, h);
-    }
+  private drawDirectLine(
+    p1: LandmarkPoint,
+    p2: LandmarkPoint,
+    color: string,
+    lineWidth: number,
+    w: number,
+    h: number
+  ): void {
+    this.ctx.save();
+    this.ctx.strokeStyle = color;
+    this.ctx.lineWidth = lineWidth;
+    this.ctx.lineCap = 'round';
+    this.ctx.beginPath();
+    this.ctx.moveTo(p1.x * w, p1.y * h);
+    this.ctx.lineTo(p2.x * w, p2.y * h);
+    this.ctx.stroke();
+    this.ctx.restore();
   }
 
   private drawConnections(
@@ -115,7 +147,7 @@ export class SkeletonRenderer {
     for (const [i, j] of connections) {
       const p1 = points[i];
       const p2 = points[j];
-      if (p1 && p2 && (p1.visibility === undefined || p1.visibility > 0.5) && (p2.visibility === undefined || p2.visibility > 0.5)) {
+      if (p1 && p2 && (p1.visibility === undefined || p1.visibility > 0.4) && (p2.visibility === undefined || p2.visibility > 0.4)) {
         this.ctx.beginPath();
         this.ctx.moveTo(p1.x * w, p1.y * h);
         this.ctx.lineTo(p2.x * w, p2.y * h);
@@ -140,7 +172,7 @@ export class SkeletonRenderer {
 
     for (const item of toDraw) {
       const p = item.pt;
-      if (p && (p.visibility === undefined || p.visibility > 0.5)) {
+      if (p && (p.visibility === undefined || p.visibility > 0.4)) {
         this.ctx.beginPath();
         this.ctx.arc(p.x * w, p.y * h, radius, 0, 2 * Math.PI);
         this.ctx.fill();
@@ -149,9 +181,6 @@ export class SkeletonRenderer {
     this.ctx.restore();
   }
 
-  /**
-   * Genera un conjunto sintético de landmarks oscilando para pruebas sin cámara
-   */
   public generateSyntheticPose(timestamp: number): HolisticFrameLandmarks {
     const t = timestamp / 1000;
     const wave = Math.sin(t * 3) * 0.08;
@@ -180,6 +209,13 @@ export class SkeletonRenderer {
       return { x: offsetX, y: offsetY, visibility: 0.95 };
     });
 
-    return { pose, poseWorld, rightHand };
+    const face: LandmarkPoint[] = [
+      { x: 0.45, y: 0.20 }, { x: 0.55, y: 0.20 }, // cejas
+      { x: 0.46, y: 0.24 }, { x: 0.54, y: 0.24 }, // ojos
+      { x: 0.50, y: 0.28 }, // nariz
+      { x: 0.47, y: 0.32 }, { x: 0.53, y: 0.32 }  // boca
+    ];
+
+    return { pose, poseWorld, rightHand, face };
   }
 }

@@ -1,17 +1,36 @@
 /**
  * Servicio de Inferencia en Tiempo Real con MediaPipe Tasks Vision (RF-01, RF-02)
- * Procesa frames de video de la cámara para detectar Pose (2D y World 3D métrico) y Manos (21 landmarks).
+ * Procesa frames de video de la cámara para detectar:
+ * - Pose (2D normalizado y World 3D métrico)
+ * - Manos (21 landmarks por mano, con umbrales calibrados para articulaciones sobre el pecho)
+ * - Rostro (Blendshapes ARKit/VRM y landmarks de contorno facial)
  */
 import {
   FilesetResolver,
   PoseLandmarker,
-  HandLandmarker
+  HandLandmarker,
+  FaceLandmarker
 } from '@mediapipe/tasks-vision';
 import { HolisticFrameLandmarks, LandmarkPoint } from '../render/skeleton-renderer';
+
+// Índices clave del contorno facial (cejas, ojos, labios, contorno) para renderizado ligero
+const KEY_FACE_LANDMARK_INDICES = [
+  // Labios
+  61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308,
+  // Ceja izquierda
+  70, 63, 105, 66, 107,
+  // Ceja derecha
+  336, 296, 334, 293, 300,
+  // Ojo izquierdo y derecho
+  33, 133, 159, 145, 362, 263, 386, 374,
+  // Nariz y barbilla
+  1, 2, 98, 327, 152
+];
 
 export class VisionService {
   private poseLandmarker: PoseLandmarker | null = null;
   private handLandmarker: HandLandmarker | null = null;
+  private faceLandmarker: FaceLandmarker | null = null;
   private isInitializing: boolean = false;
   private isReady: boolean = false;
 
@@ -24,7 +43,7 @@ export class VisionService {
         'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
       );
 
-      // 1. Inicializar detector de Pose corporal (genera landmarks normalizados y worldLandmarks métricos en 3D)
+      // 1. Detector de Pose corporal (landmarks 2D + world 3D en metros)
       this.poseLandmarker = await PoseLandmarker.createFromOptions(wasmFileset, {
         baseOptions: {
           modelAssetPath: '/models/pose_landmarker.task',
@@ -37,7 +56,7 @@ export class VisionService {
         minTrackingConfidence: 0.5
       });
 
-      // 2. Inicializar detector de Manos detalladas (21 landmarks por mano)
+      // 2. Detector de Manos (calibrado a 0.3 para evitar que se pierdan sobre la ropa/pecho)
       this.handLandmarker = await HandLandmarker.createFromOptions(wasmFileset, {
         baseOptions: {
           modelAssetPath: '/models/hand_landmarker.task',
@@ -45,13 +64,27 @@ export class VisionService {
         },
         runningMode: 'VIDEO',
         numHands: 2,
-        minHandDetectionConfidence: 0.5,
-        minHandPresenceConfidence: 0.5,
-        minTrackingConfidence: 0.5
+        minHandDetectionConfidence: 0.3,
+        minHandPresenceConfidence: 0.3,
+        minTrackingConfidence: 0.3
+      });
+
+      // 3. Detector de Rostro con extracción de Blendshapes para VRoid/Blender (prosoponema)
+      this.faceLandmarker = await FaceLandmarker.createFromOptions(wasmFileset, {
+        baseOptions: {
+          modelAssetPath: '/models/face_landmarker.task',
+          delegate: 'GPU'
+        },
+        outputFaceBlendshapes: true,
+        runningMode: 'VIDEO',
+        numFaces: 1,
+        minFaceDetectionConfidence: 0.4,
+        minFacePresenceConfidence: 0.4,
+        minTrackingConfidence: 0.4
       });
 
       this.isReady = true;
-      console.log('[VisionService] Modelos de Pose (2D/World) y Manos cargados con éxito.');
+      console.log('[VisionService] Modelos de Pose, Manos y Rostro (Blendshapes) activos con GPU.');
     } catch (err) {
       console.error('[VisionService] Error al inicializar MediaPipe:', err);
       throw err;
@@ -71,7 +104,7 @@ export class VisionService {
     const result: HolisticFrameLandmarks = {};
     let encuadreValido = false;
 
-    // 1. Inferencia de Pose (Normalizada y World 3D métrica para VRM)
+    // 1. Inferencia de Pose
     if (this.poseLandmarker) {
       const poseResult = this.poseLandmarker.detectForVideo(video, timestamp);
       if (poseResult.landmarks && poseResult.landmarks.length > 0) {
@@ -83,7 +116,6 @@ export class VisionService {
           visibility: lm.visibility ?? 1.0
         }));
 
-        // pose_world (en metros, origen en centro de cadera) para retargeting VRM / Kalidokit
         if (poseResult.worldLandmarks && poseResult.worldLandmarks.length > 0) {
           result.poseWorld = poseResult.worldLandmarks[0].map((wlm) => ({
             x: wlm.x,
@@ -93,7 +125,6 @@ export class VisionService {
           }));
         }
 
-        // Validación de encuadre básico:
         const nose = result.pose[0];
         const leftShoulder = result.pose[11];
         const rightShoulder = result.pose[12];
@@ -109,7 +140,7 @@ export class VisionService {
       }
     }
 
-    // 2. Inferencia de Manos
+    // 2. Inferencia de Manos (con soporte para pecho / contrastes bajos)
     if (this.handLandmarker) {
       const handResult = this.handLandmarker.detectForVideo(video, timestamp);
       if (handResult.landmarks && handResult.landmarks.length > 0) {
@@ -128,6 +159,29 @@ export class VisionService {
             result.rightHand = mappedPoints;
           }
         });
+      }
+    }
+
+    // 3. Inferencia de Rostro y Blendshapes (Prosoponema)
+    if (this.faceLandmarker) {
+      const faceResult = this.faceLandmarker.detectForVideo(video, timestamp);
+      if (faceResult.faceLandmarks && faceResult.faceLandmarks.length > 0) {
+        const allFacePoints = faceResult.faceLandmarks[0];
+
+        // Mapear solo puntos clave de contorno facial para el canvas
+        result.face = KEY_FACE_LANDMARK_INDICES.map((idx) => {
+          const pt = allFacePoints[idx];
+          return pt ? { x: pt.x, y: pt.y, z: pt.z, visibility: 1.0 } : { x: 0, y: 0, z: 0, visibility: 0 };
+        });
+
+        // Extraer coeficientes de Blendshapes (ARKit / VRoid / Blender)
+        if (faceResult.faceBlendshapes && faceResult.faceBlendshapes.length > 0) {
+          const blendshapesObj: Record<string, number> = {};
+          faceResult.faceBlendshapes[0].categories.forEach((cat) => {
+            blendshapesObj[cat.categoryName] = Math.round(cat.score * 1000) / 1000;
+          });
+          result.blendshapes = blendshapesObj;
+        }
       }
     }
 
