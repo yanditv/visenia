@@ -1,17 +1,19 @@
 /**
- * Punto de entrada principal de la PWA Viseña — Espejo Digital + Avatar Guía
- * Sprint 1 (RF-01, RF-02, RF-42, ADR-002)
+ * Punto de entrada principal de la PWA Viseña — Espejo Digital + Avatar Guía + Anotador
+ * Sprint 1 (RF-01, RF-02, RF-36, RF-42, ADR-002)
  *
  * Layout dividido:
  *  - Panel izquierdo: espejo del usuario con inferencia MediaPipe (Pose + Manos + Rostro)
  *  - Panel derecho: avatar VRM guía (visenia.vrm) con cinemática en tiempo real vía Kalidokit
+ *  - Anotador RF-36: captura, segmentación y exportación de referencias JSON fonológicas
  */
 import { CameraService } from './camera/camera-service';
 import { SkeletonRenderer, HolisticFrameLandmarks } from './render/skeleton-renderer';
 import { VisionService } from './vision/vision-service';
 import { VrmAvatarViewer, VRM_MODEL_URL } from './avatar/vrm-loader-spike';
+import { AnnotationService } from './anotador/annotation-service';
 
-// ─── Referencias del DOM ────────────────────────────────────────────────────
+// ─── Referencias del DOM: Espejo y HUD ──────────────────────────────────────
 const video = document.getElementById('webcam-video') as HTMLVideoElement;
 const canvas = document.getElementById('skeleton-canvas') as HTMLCanvasElement;
 const fpsDisplay = document.getElementById('fps-display') as HTMLSpanElement;
@@ -22,10 +24,35 @@ const btnToggleSynthetic = document.getElementById('btn-toggle-synthetic') as HT
 const avatarContainer = document.getElementById('avatar-container') as HTMLDivElement;
 const avatarLoading = document.getElementById('avatar-loading') as HTMLDivElement;
 
+// ─── Referencias del DOM: Tabs y Drawer Anotador RF-36 ───────────────────────
+const tabPractica = document.getElementById('tab-practica') as HTMLButtonElement;
+const tabAnotador = document.getElementById('tab-anotador') as HTMLButtonElement;
+const anotadorDrawer = document.getElementById('anotador-drawer') as HTMLElement;
+const btnCerrarAnotador = document.getElementById('btn-cerrar-anotador') as HTMLButtonElement;
+const btnRecordSena = document.getElementById('btn-record-sena') as HTMLButtonElement;
+const recordStatus = document.getElementById('record-status') as HTMLSpanElement;
+const recordCounter = document.getElementById('record-counter') as HTMLSpanElement;
+const sliderFrameInicio = document.getElementById('slider-frame-inicio') as HTMLInputElement;
+const sliderFrameFin = document.getElementById('slider-frame-fin') as HTMLInputElement;
+const lblFrameInicio = document.getElementById('lbl-frame-inicio') as HTMLElement;
+const lblFrameFin = document.getElementById('lbl-frame-fin') as HTMLElement;
+
+const inputGlosa = document.getElementById('input-glosa') as HTMLInputElement;
+const selectUnidad = document.getElementById('select-unidad') as HTMLInputElement;
+const selectDificultad = document.getElementById('select-dificultad') as HTMLSelectElement;
+const selectManoDom = document.getElementById('select-mano-dom') as HTMLSelectElement;
+const selectToponema = document.getElementById('select-toponema') as HTMLSelectElement;
+const selectKinesema = document.getElementById('select-kinesema') as HTMLSelectElement;
+const inputQueirema = document.getElementById('input-queirema') as HTMLInputElement;
+const checkProsoponema = document.getElementById('check-prosoponema') as HTMLInputElement;
+const btnExportJson = document.getElementById('btn-export-json') as HTMLButtonElement;
+const exportMsg = document.getElementById('export-msg') as HTMLSpanElement;
+
 // ─── Servicios ───────────────────────────────────────────────────────────────
 const cameraService = new CameraService(video);
 const renderer = new SkeletonRenderer(canvas);
 const visionService = new VisionService();
+const annotationService = new AnnotationService();
 
 // ─── Avatar VRM (Three.js + Kalidokit) ──────────────────────────────────────
 const avatarViewer = new VrmAvatarViewer({ container: avatarContainer });
@@ -34,7 +61,6 @@ const avatarViewer = new VrmAvatarViewer({ container: avatarContainer });
 avatarViewer
   .loadModel(VRM_MODEL_URL)
   .then(() => {
-    // Ocultar spinner y arrancar bucle de animación Three.js
     avatarLoading.classList.add('oculto');
     avatarViewer.start();
     console.log('[main] ✓ Avatar VRM listo y animando con Kalidokit.');
@@ -64,7 +90,6 @@ window.addEventListener('resize', syncCanvasSize);
 
 // ─── Bucle de renderizado del espejo (RAF) ───────────────────────────────────
 function animationLoop(timestamp: number) {
-  // Cálculo de FPS
   frameCount++;
   if (timestamp - lastTimestamp >= 1000) {
     currentFps = Math.round((frameCount * 1000) / (timestamp - lastTimestamp));
@@ -91,7 +116,6 @@ function animationLoop(timestamp: number) {
         encuadreBox?.classList.remove('valido');
       }
     } else {
-      // Modelos MediaPipe aún cargando
       encuadreBox?.classList.remove('valido');
     }
   } else {
@@ -101,8 +125,16 @@ function animationLoop(timestamp: number) {
 
   if (landmarks.pose || landmarks.rightHand || landmarks.leftHand) {
     renderer.render(landmarks);
-    // Transmitir landmarks al avatar para cinemática inversa en tiempo real (Kalidokit)
     avatarViewer.updatePose(landmarks);
+
+    // Registro continuo si la grabación del anotador está activa
+    if (annotationService.getIsRecording()) {
+      annotationService.recordFrame(landmarks);
+      const frames = annotationService.getRecordedFrames();
+      const lastFrame = frames[frames.length - 1];
+      const durSec = (lastFrame.timestamp_ms / 1000).toFixed(1);
+      recordCounter.textContent = `Frames: ${frames.length} | ${durSec}s`;
+    }
   } else {
     renderer.clear();
     avatarViewer.updatePose({});
@@ -141,7 +173,6 @@ btnToggleCamera.addEventListener('click', async () => {
       statusDisplay.textContent = 'Cargando modelos MediaPipe...';
       statusDisplay.className = 'status-indicator';
 
-      // Inicializar inferencia en GPU
       try {
         await visionService.init();
         statusDisplay.textContent = 'Seguimiento Activo (GPU)';
@@ -180,6 +211,117 @@ btnToggleSynthetic.addEventListener('click', () => {
     statusDisplay.className = 'status-indicator';
     renderer.clear();
     avatarViewer.updatePose({});
+  }
+});
+
+// ─── Lógica de Navegación Tabs & Drawer Anotador (RF-36) ──────────────────────
+tabPractica.addEventListener('click', () => {
+  tabPractica.classList.add('active');
+  tabAnotador.classList.remove('active');
+  anotadorDrawer.classList.add('oculto');
+});
+
+tabAnotador.addEventListener('click', () => {
+  tabAnotador.classList.add('active');
+  tabPractica.classList.remove('active');
+  anotadorDrawer.classList.remove('oculto');
+});
+
+btnCerrarAnotador.addEventListener('click', () => {
+  tabPractica.click();
+});
+
+// ─── Controles de Grabación de Seña ──────────────────────────────────────────
+btnRecordSena.addEventListener('click', () => {
+  if (!annotationService.getIsRecording()) {
+    // Iniciar grabación
+    if (!cameraService.isRunning() && !isSimulating) {
+      alert('Por favor enciende la cámara o activa el Modo Simulación antes de grabar.');
+      return;
+    }
+    annotationService.startRecording();
+    btnRecordSena.textContent = '⏹ Detener Grabación';
+    btnRecordSena.classList.add('recording');
+    recordStatus.textContent = 'Grabando...';
+    recordStatus.style.color = '#ef4444';
+    exportMsg.textContent = '';
+  } else {
+    // Detener grabación
+    const stats = annotationService.stopRecording();
+    btnRecordSena.textContent = '⏺ Grabar Nueva Toma';
+    btnRecordSena.classList.remove('recording');
+    recordStatus.textContent = `Grabación finalizada (${stats.totalFrames} frames)`;
+    recordStatus.style.color = '#22c55e';
+
+    // Ajustar límites de los sliders de segmentación
+    const maxIdx = Math.max(0, stats.totalFrames - 1);
+    sliderFrameInicio.max = maxIdx.toString();
+    sliderFrameFin.max = maxIdx.toString();
+    sliderFrameInicio.value = '0';
+    sliderFrameFin.value = maxIdx.toString();
+    lblFrameInicio.textContent = '0';
+    lblFrameFin.textContent = maxIdx.toString();
+  }
+});
+
+// Sincronización de sliders de segmentación
+sliderFrameInicio.addEventListener('input', () => {
+  lblFrameInicio.textContent = sliderFrameInicio.value;
+  if (parseInt(sliderFrameInicio.value) > parseInt(sliderFrameFin.value)) {
+    sliderFrameFin.value = sliderFrameInicio.value;
+    lblFrameFin.textContent = sliderFrameInicio.value;
+  }
+});
+
+sliderFrameFin.addEventListener('input', () => {
+  lblFrameFin.textContent = sliderFrameFin.value;
+  if (parseInt(sliderFrameFin.value) < parseInt(sliderFrameInicio.value)) {
+    sliderFrameInicio.value = sliderFrameFin.value;
+    lblFrameInicio.textContent = sliderFrameFin.value;
+  }
+});
+
+// ─── Exportación de JSON Schema v1.1.0 ───────────────────────────────────────
+btnExportJson.addEventListener('click', () => {
+  const recorded = annotationService.getRecordedFrames();
+  if (recorded.length === 0) {
+    exportMsg.textContent = '⚠️ Primero debes grabar una toma con frames válidos.';
+    exportMsg.className = 'export-msg error';
+    return;
+  }
+
+  const glosa = inputGlosa.value.trim();
+  if (!glosa) {
+    exportMsg.textContent = '⚠️ La glosa de la seña es obligatoria.';
+    exportMsg.className = 'export-msg error';
+    return;
+  }
+
+  try {
+    const doc = annotationService.buildReferenceDocument({
+      glosa,
+      unidadTematica: parseInt(selectUnidad.value) || 1,
+      dificultad: selectDificultad.value as 'facil' | 'intermedio' | 'avanzado',
+      manoDominante: selectManoDom.value as 'derecha' | 'izquierda' | 'ambas',
+      anotador: 'Especialista LSE Viseña',
+      frameInicioSena: parseInt(sliderFrameInicio.value),
+      frameFinSena: parseInt(sliderFrameFin.value),
+      queiremaForma: inputQueirema.value.trim() || 'mano_plana',
+      queiremaDesc: 'Configuración manual base anotada',
+      kinemaPalma: [0.0, 1.0, 0.0],
+      toponemaZona: selectToponema.value as any,
+      kinesemaTipo: selectKinesema.value as any,
+      kinesemaRepeticiones: 1,
+      prosoponemaRequerido: checkProsoponema.checked
+    });
+
+    annotationService.downloadJson(doc);
+    exportMsg.textContent = `✓ Referencia ${doc.id}.json exportada correctamente.`;
+    exportMsg.className = 'export-msg success';
+  } catch (err: unknown) {
+    const error = err as Error;
+    exportMsg.textContent = `Error: ${error.message}`;
+    exportMsg.className = 'export-msg error';
   }
 });
 
