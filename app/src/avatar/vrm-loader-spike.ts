@@ -1,15 +1,23 @@
 /**
- * Spike Técnico: Carga y Manipulación de Avatar VRM con Three.js (RF-42 Sec. 7)
- * Evalúa el rendimiento, carga de malla humanoid y control articular con @pixiv/three-vrm.
+ * Carga y control del Avatar VRM con Three.js (RF-42)
+ *
+ * Sprint 1 (PR #11): Integración del modelo real visenia.vrm en la vista dividida.
+ * El visor se monta en #avatar-container (panel derecho) y comparte el bucle RAF
+ * con el espejo del usuario.
+ *
+ * Dependencias: three, @pixiv/three-vrm
+ * ADR de referencia: ADR-002 (retargeting VRM)
  */
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VRM, VRMLoaderPlugin, VRMUtils, VRMHumanBoneName } from '@pixiv/three-vrm';
 
-export interface VrmSpikeConfig {
+/** Ruta pública del modelo VRM del proyecto */
+export const VRM_MODEL_URL = '/models/visenia.vrm';
+
+export interface VrmAvatarConfig {
+  /** Contenedor HTML donde se montará el canvas Three.js */
   container: HTMLElement;
-  width?: number;
-  height?: number;
 }
 
 export class VrmAvatarViewer {
@@ -20,46 +28,58 @@ export class VrmAvatarViewer {
   private clock: THREE.Clock;
   private isAnimating: boolean = false;
   private container: HTMLElement;
+  private resizeObserver: ResizeObserver;
 
-  constructor(config: VrmSpikeConfig) {
+  constructor(config: VrmAvatarConfig) {
     this.container = config.container;
-    const w = config.width || this.container.clientWidth || 400;
-    const h = config.height || this.container.clientHeight || 400;
+    const w = this.container.clientWidth || 400;
+    const h = this.container.clientHeight || 600;
 
-    // 1. Escena
+    // 1. Escena con fondo oscuro coherente con el tema de la app
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0f172a);
+    this.scene.background = new THREE.Color(0x0b1120);
 
-    // 2. Cámara (enfocando busto y brazos superiores, clave para lengua de señas)
-    this.camera = new THREE.PerspectiveCamera(30.0, w / h, 0.1, 20.0);
-    this.camera.position.set(0.0, 1.25, 2.2);
+    // 2. Cámara enfocando busto y brazos (zona clave para lengua de señas)
+    this.camera = new THREE.PerspectiveCamera(28.0, w / h, 0.1, 20.0);
+    this.camera.position.set(0.0, 1.3, 2.0);
+    this.camera.lookAt(0, 1.1, 0);
 
-    // 3. Renderizador WebGL
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    // 3. Renderizador WebGL — el canvas se inyecta en el contenedor
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     this.renderer.setSize(w, h);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.container.appendChild(this.renderer.domElement);
 
-    // 4. Iluminación para resaltar anatomía de manos y rostro
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+    // 4. Iluminación para resaltar manos y rostro del avatar
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
     this.scene.add(ambientLight);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
-    keyLight.position.set(1.0, 2.0, 1.5).normalize();
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.8);
+    keyLight.position.set(1.0, 2.5, 2.0).normalize();
     this.scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.8);
-    fillLight.position.set(-1.0, 1.0, 1.0).normalize();
+    const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.6);
+    fillLight.position.set(-1.5, 1.0, 1.0).normalize();
     this.scene.add(fillLight);
 
     this.clock = new THREE.Clock();
+
+    // 5. Redimensionado automático cuando el contenedor cambia de tamaño
+    this.resizeObserver = new ResizeObserver(() => {
+      const rect = this.container.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        this.resize(rect.width, rect.height);
+      }
+    });
+    this.resizeObserver.observe(this.container);
   }
 
   /**
-   * Carga un modelo VRM desde una URL o asset local
+   * Carga el modelo VRM desde la URL pública.
+   * Retorna la instancia VRM para permitir retargeting externo (Kalidokit).
    */
-  public async loadModel(url: string): Promise<VRM> {
+  public async loadModel(url: string = VRM_MODEL_URL): Promise<VRM> {
     const loader = new GLTFLoader();
     loader.register((parser) => new VRMLoaderPlugin(parser));
 
@@ -69,15 +89,18 @@ export class VrmAvatarViewer {
         (gltf) => {
           const vrm = gltf.userData.vrm as VRM;
           if (!vrm) {
-            reject(new Error('El archivo cargado no contiene metadatos VRM válidos.'));
+            reject(new Error('[VrmAvatarViewer] El archivo cargado no contiene metadatos VRM válidos.'));
             return;
           }
 
-          // Optimización de rotación y mallas VRoid
+          // Limpieza de vértices y joints innecesarios (optimización VRoid)
           VRMUtils.removeUnnecessaryVertices(gltf.scene);
           VRMUtils.removeUnnecessaryJoints(gltf.scene);
-          vrm.scene.rotation.y = Math.PI; // Orientar hacia la cámara
 
+          // Orientar avatar hacia la cámara
+          vrm.scene.rotation.y = Math.PI;
+
+          // Reemplazar modelo anterior si existía
           if (this.currentVrm) {
             this.scene.remove(this.currentVrm.scene);
             VRMUtils.deepDispose(this.currentVrm.scene);
@@ -85,12 +108,18 @@ export class VrmAvatarViewer {
 
           this.currentVrm = vrm;
           this.scene.add(vrm.scene);
+
+          console.log('[VrmAvatarViewer] ✓ Modelo VRM cargado:', url);
           resolve(vrm);
         },
         (progress) => {
-          console.log(`[VRM Spike] Cargando modelo: ${((progress.loaded / progress.total) * 100).toFixed(0)}%`);
+          if (progress.total > 0) {
+            const pct = ((progress.loaded / progress.total) * 100).toFixed(0);
+            console.log(`[VrmAvatarViewer] Cargando modelo: ${pct}%`);
+          }
         },
         (error) => {
+          console.error('[VrmAvatarViewer] Error al cargar VRM:', error);
           reject(error);
         }
       );
@@ -98,7 +127,9 @@ export class VrmAvatarViewer {
   }
 
   /**
-   * Inicia el bucle de renderizado y animación de prueba
+   * Inicia el bucle de renderizado Three.js.
+   * En Sprint 1 anima una pose de descanso neutral.
+   * En Sprint 2 (Kalidokit) este método recibirá los datos de pose en vivo.
    */
   public start(): void {
     if (this.isAnimating) return;
@@ -112,20 +143,24 @@ export class VrmAvatarViewer {
       const elapsed = this.clock.getElapsedTime();
 
       if (this.currentVrm) {
-        // Simulación de respiración y movimiento básico en cuello/cabeza
-        const headNode = this.currentVrm.humanoid.getNormalizedBoneNode(VRMHumanBoneName.Head);
-        if (headNode) {
-          headNode.rotation.y = Math.sin(elapsed * 1.5) * 0.1;
+        // Pose de descanso: respiración sutil en el cuello
+        const neck = this.currentVrm.humanoid.getNormalizedBoneNode(VRMHumanBoneName.Neck);
+        if (neck) {
+          neck.rotation.x = Math.sin(elapsed * 0.8) * 0.02;
         }
 
-        // Simulación de articulación de brazo/mano derecha (postura de seña)
+        // Brazos en posición relajada a los costados
         const rightUpperArm = this.currentVrm.humanoid.getNormalizedBoneNode(VRMHumanBoneName.RightUpperArm);
         if (rightUpperArm) {
-          rightUpperArm.rotation.z = -1.2 + Math.sin(elapsed * 2) * 0.15;
-          rightUpperArm.rotation.x = 0.5;
+          rightUpperArm.rotation.z = -0.15 + Math.sin(elapsed * 0.6) * 0.02;
         }
 
-        // Actualizar cinemática interna del VRM
+        const leftUpperArm = this.currentVrm.humanoid.getNormalizedBoneNode(VRMHumanBoneName.LeftUpperArm);
+        if (leftUpperArm) {
+          leftUpperArm.rotation.z = 0.15 + Math.sin(elapsed * 0.6) * 0.02;
+        }
+
+        // Actualizar cinemática interna del VRM (blendshapes, springs, etc.)
         this.currentVrm.update(delta);
       }
 
@@ -139,6 +174,11 @@ export class VrmAvatarViewer {
     this.isAnimating = false;
   }
 
+  /** Expone el VRM actual para retargeting externo (Kalidokit — PR #12) */
+  public getVrm(): VRM | null {
+    return this.currentVrm;
+  }
+
   public resize(width: number, height: number): void {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
@@ -146,6 +186,7 @@ export class VrmAvatarViewer {
   }
 
   public dispose(): void {
+    this.resizeObserver.disconnect();
     this.stop();
     if (this.currentVrm) {
       this.scene.remove(this.currentVrm.scene);
