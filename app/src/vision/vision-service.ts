@@ -33,6 +33,8 @@ export class VisionService {
   private poseLandmarker: PoseLandmarker | null = null;
   private handLandmarker: HandLandmarker | null = null;
   private faceLandmarker: FaceLandmarker | null = null;
+  private framingSince: number | null = null;
+  private previousHands: { left?: LandmarkPoint; right?: LandmarkPoint } = {};
   private isInitializing: boolean = false;
   private isReady: boolean = false;
 
@@ -139,7 +141,7 @@ export class VisionService {
       return { landmarks: {}, encuadreValido: false };
     }
 
-    const result: HolisticFrameLandmarks = {};
+    const result: HolisticFrameLandmarks = { imageAspect: video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : 1 };
     let encuadreValido = false;
 
     // 1. Inferencia de Pose
@@ -182,53 +184,31 @@ export class VisionService {
     if (this.handLandmarker) {
       const handResult = this.handLandmarker.detectForVideo(video, timestamp);
       if (handResult.landmarks && handResult.landmarks.length > 0) {
-        // En una cámara web frontal no reflejada en el sensor (unmirrored raw buffer):
-        // MediaPipe asume 'selfie' por defecto, por lo que:
-        // - categoryName === 'Left' corresponde a la mano DERECHA anatómica del usuario.
-        // - categoryName === 'Right' corresponde a la mano IZQUIERDA anatómica del usuario.
-        // Además, en el espacio del sensor, el hombro derecho (pose[12]) tiene menor X que el hombro izquierdo (pose[11]).
-        const xCenter = (result.pose?.[11]?.x && result.pose?.[12]?.x)
-          ? (result.pose[11].x + result.pose[12].x) / 2
-          : 0.5;
-
-        const detectedHands = handResult.landmarks.map((handPoints, idx) => {
-          const mappedPoints: LandmarkPoint[] = handPoints.map((lm) => ({
-            x: lm.x,
-            y: lm.y,
-            z: lm.z,
-            visibility: 1.0
-          }));
-          const category = handResult.handedness[idx]?.[0]?.categoryName ?? '';
-          const score = handResult.handedness[idx]?.[0]?.score ?? 0;
-          const wristX = mappedPoints[0]?.x ?? 0.5;
-          return { points: mappedPoints, category, score, wristX };
-        });
-
-        if (detectedHands.length === 1) {
-          const h = detectedHands[0];
-          // Si MediaPipe clasifica 'Left', es la mano derecha del usuario.
-          // Si la clasificación no es concluyente, corroborar si la muñeca está en la mitad derecha del cuerpo (x < xCenter).
-          const isRight = h.category === 'Left' || (h.category !== 'Right' && h.wristX < xCenter);
-          if (isRight) {
-            result.rightHand = h.points;
-          } else {
-            result.leftHand = h.points;
-          }
-        } else if (detectedHands.length >= 2) {
-          // Desempatar dos manos para evitar colisiones:
-          const candRight = detectedHands.find((h) => h.category === 'Left');
-          const candLeft = detectedHands.find((h) => h.category === 'Right');
-
-          if (candRight && candLeft) {
-            result.rightHand = candRight.points;
-            result.leftHand = candLeft.points;
-          } else {
-            // Si ambas tuvieron la misma etiqueta, ordenar por posición espacial (menor X es lado derecho del usuario)
-            detectedHands.sort((a, b) => a.wristX - b.wristX);
-            result.rightHand = detectedHands[0].points;
-            result.leftHand = detectedHands[1].points;
-          }
+        const hands = handResult.landmarks.map((points, index) => ({
+          points: points.map(p => ({ x: p.x, y: p.y, z: p.z, visibility: 1 })),
+          category: handResult.handedness[index]?.[0]?.categoryName,
+          score: handResult.handedness[index]?.[0]?.score ?? 0
+        }));
+        const aspect = result.imageAspect ?? 1;
+        const cost = (hand: typeof hands[number], side: 'left' | 'right') => {
+          const index = side === 'left' ? 15 : 16;
+          const poseWrist = result.pose?.[index];
+          const anchor = poseWrist && (poseWrist.visibility ?? 1) > 0.25 ? poseWrist : this.previousHands[side];
+          if (anchor) return Math.hypot((hand.points[0].x - anchor.x) * aspect, hand.points[0].y - anchor.y);
+          // Labels only break ties when body and temporal anchors are unavailable.
+          const expected = side === 'left' ? 'Right' : 'Left';
+          return hand.category === expected ? 1 - hand.score : 1 + hand.score;
+        };
+        if (hands.length >= 2) {
+          const direct = cost(hands[0], 'left') + cost(hands[1], 'right');
+          const crossed = cost(hands[0], 'right') + cost(hands[1], 'left');
+          result.leftHand = hands[direct <= crossed ? 0 : 1].points;
+          result.rightHand = hands[direct <= crossed ? 1 : 0].points;
+        } else if (hands.length === 1) {
+          if (cost(hands[0], 'left') <= cost(hands[0], 'right')) result.leftHand = hands[0].points;
+          else result.rightHand = hands[0].points;
         }
+        this.previousHands = { left: result.leftHand?.[0], right: result.rightHand?.[0] };
       }
     }
 
@@ -255,7 +235,12 @@ export class VisionService {
       }
     }
 
-    return { landmarks: result, encuadreValido };
+    const inside = (p: LandmarkPoint | undefined) => p && (p.visibility ?? 1) > 0.5 && p.x > 0.05 && p.x < 0.95 && p.y > 0.05 && p.y < 0.95;
+    encuadreValido = encuadreValido && !!result.face?.length && !!inside(result.leftHand?.[0]) && !!inside(result.rightHand?.[0]) && !!inside(result.pose?.[11]) && !!inside(result.pose?.[12]);
+    if (!encuadreValido) this.framingSince = null;
+    else this.framingSince ??= timestamp;
+    if (!result.leftHand && !result.rightHand) this.previousHands = {};
+    return { landmarks: result, encuadreValido: encuadreValido && timestamp - (this.framingSince ?? timestamp) >= 1000 };
   }
 
   public getReadyStatus(): boolean {
