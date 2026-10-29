@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0f172a" />
-  <meta name="description" content="Espejo y Catálogo de Práctica de Lengua de Señas - Viseña (Sprint 1 / RF-01, RF-02, RF-07, RF-08, RF-36, RF-42)" />
+  <meta name="description" content="Espejo y Catálogo de Práctica de Lengua de Señas - Viseña (Sprint 1)" />
   <link rel="manifest" href="/manifest.json" />
   <title>Viseña - Espejo, Catálogo y Avatar 3D (PWA)</title>
   <link rel="stylesheet" href="/src/style.css" />
@@ -14,12 +14,12 @@
     <header class="app-header">
       <div class="logo-area">
         <h1>Viseña</h1>
-        <span class="badge">Sprint 1 • RF-07 / RF-08 / RF-36 / RF-42</span>
+        <span class="badge">Sprint 1 • Práctica & Guía</span>
       </div>
 
       <nav class="nav-tabs" aria-label="Modos de la aplicación">
         <button id="tab-practica" class="tab-btn active">🎯 Práctica & Catálogo</button>
-        <button id="tab-anotador" class="tab-btn">📝 Anotador de Señas (RF-36)</button>
+        <button id="tab-anotador" class="tab-btn">📝 Anotador de Señas</button>
       </nav>
 
       <div class="hud-stats">
@@ -46,18 +46,18 @@
         </div>
       </section>
 
-      <!-- Panel derecho: avatar guía VRM y reproductor de catálogo (RF-07, RF-08) -->
+      <!-- Panel derecho: avatar guía VRM y reproductor de catálogo -->
       <section class="panel panel-avatar" aria-label="Avatar guía y reproductor">
         <div class="avatar-header-bar">
           <div class="sena-selector-group">
-            <label for="select-catalogo-sena">Seña Guía (RF-07):</label>
+            <label for="select-catalogo-sena">Seña Guía:</label>
             <select id="select-catalogo-sena" class="select-sena">
               <option value="">Cargando catálogo...</option>
             </select>
           </div>
           <div class="avatar-mode-segmented" role="tablist" aria-label="Modo de visualización del avatar">
-            <button id="btn-mode-guia" class="mode-btn active" title="Reproduce la seña canónica del catálogo de referencia (RF-07, RF-08)">📖 Modo Guía</button>
-            <button id="btn-mode-espejo" class="mode-btn" title="El avatar refleja tu movimiento en tiempo real 3D (RF-42)">🪞 Reflejo en Vivo</button>
+            <button id="btn-mode-guia" class="mode-btn active" title="Reproduce la seña canónica del catálogo de referencia">📖 Modo Guía</button>
+            <button id="btn-mode-espejo" class="mode-btn" title="El avatar refleja tu movimiento en tiempo real 3D">🪞 Reflejo en Vivo</button>
           </div>
           <div id="fonologia-badge" class="fonologia-badge">
             <span id="fonologia-info">Toponema: -- • Mov: --</span>
@@ -68,13 +68,9 @@
           <div id="avatar-loading" class="avatar-loading">
             <span class="avatar-loading-text">Cargando avatar…</span>
           </div>
-          <canvas id="avatar-hand-canvas" class="avatar-hand-overlay"></canvas>
-          <div id="avatar-hand-badge" class="avatar-hand-badge">
-            <span id="lbl-hand-shape">Forma: mano_abierta</span>
-          </div>
         </div>
 
-        <!-- Barra de reproducción interactiva (RF-08) -->
+        <!-- Barra de reproducción interactiva -->
         <div class="avatar-player-bar">
           <button id="btn-player-play" class="btn btn-player-play">▶ Reproducir</button>
           <button id="btn-player-speed" class="btn btn-player-speed" title="Alternar velocidad normal y lenta (1x / 0.5x)">1.0×</button>
@@ -86,10 +82,10 @@
 
     </main>
 
-    <!-- Panel de Anotación Fonológica RF-36 (Expandible / Drawer) -->
+    <!-- Panel de Anotación Fonológica (Expandible / Drawer) -->
     <section id="anotador-drawer" class="anotador-drawer oculto" aria-label="Herramienta de Anotación Fonológica">
       <div class="drawer-header">
-        <h2>Herramienta de Anotación de Referencia (RF-36)</h2>
+        <h2>Herramienta de Anotación de Referencia</h2>
         <button id="btn-cerrar-anotador" class="btn-icon" aria-label="Cerrar anotador">✕</button>
       </div>
 
