@@ -6,6 +6,7 @@
  * - Control de reproducción interactivo: Play / Pausa / Scrubbing / Velocidad 1x y 0.5x (RF-08)
  * - Emisión de landmarks por fotograma para el solver Kalidokit
  */
+import { Quaternion } from 'three';
 import { ReferenciaSenaData, FrameCapturaSchema } from '../anotador/annotation-service';
 import { HolisticFrameLandmarks } from '../render/skeleton-renderer';
 
@@ -16,6 +17,7 @@ export class CatalogoPlayerService {
   private playbackSpeed: number = 1.0; // 1.0 = normal, 0.5 = lenta (RF-08)
   private currentFrameIndex: number = 0;
   private lastTickTime: number = 0;
+  private playbackTimeMs = 0;
   private isLoaded: boolean = false;
 
   public async loadCatalog(url: string = '/data/referencias-v1.json'): Promise<ReferenciaSenaData[]> {
@@ -24,7 +26,13 @@ export class CatalogoPlayerService {
       if (!res.ok) {
         throw new Error(`Error HTTP ${res.status} al cargar catálogo de señas.`);
       }
-      this.catalogo = await res.json();
+      const data: unknown = await res.json();
+      if (!Array.isArray(data) || !data.every(s => s && typeof s.id === 'string' && typeof s.glosa === 'string' && s.parametros_fonologicos && Array.isArray(s.frames) && s.frames.length > 0 && s.segmentacion && s.metadatos_grabacion && s.frames.every((f: FrameCapturaSchema, i: number) => Number.isFinite(f.timestamp_ms) && (i === 0 || f.timestamp_ms > s.frames[i - 1].timestamp_ms)))) {
+        throw new Error('El catálogo no contiene referencias con tiempos válidos.');
+      }
+      this.catalogo = data;
+      this.selectedSena = null;
+      this.isPlaying = false;
       this.isLoaded = true;
 
       if (this.catalogo.length > 0 && !this.selectedSena) {
@@ -34,6 +42,10 @@ export class CatalogoPlayerService {
       console.log(`[CatalogoPlayer] ✓ ${this.catalogo.length} señas de referencia cargadas.`);
       return this.catalogo;
     } catch (err) {
+      this.catalogo = [];
+      this.selectedSena = null;
+      this.isLoaded = false;
+      this.isPlaying = false;
       console.error('[CatalogoPlayer] Error al cargar catálogo:', err);
       return [];
     }
@@ -55,7 +67,8 @@ export class CatalogoPlayerService {
     const sena = this.catalogo.find((s) => s.id === id);
     if (sena) {
       this.selectedSena = sena;
-      this.currentFrameIndex = 0;
+      this.currentFrameIndex = this.getSegmentBounds(sena)[0];
+      this.playbackTimeMs = sena.frames[this.currentFrameIndex].timestamp_ms;
       this.lastTickTime = performance.now();
       return sena;
     }
@@ -69,6 +82,7 @@ export class CatalogoPlayerService {
   }
 
   public pause(): void {
+    this.update(performance.now());
     this.isPlaying = false;
   }
 
@@ -82,6 +96,8 @@ export class CatalogoPlayerService {
   }
 
   public setSpeed(speed: number): void {
+    if (!Number.isFinite(speed)) return;
+    this.update(performance.now());
     this.playbackSpeed = Math.max(0.25, Math.min(2.0, speed));
   }
 
@@ -99,7 +115,11 @@ export class CatalogoPlayerService {
 
   public seekFrame(index: number): void {
     if (!this.selectedSena || !this.selectedSena.frames.length) return;
-    this.currentFrameIndex = Math.max(0, Math.min(index, this.selectedSena.frames.length - 1));
+    if (!Number.isFinite(index)) return;
+    const [start, end] = this.getSegmentBounds(this.selectedSena);
+    this.currentFrameIndex = Math.max(start, Math.min(Math.trunc(index), end));
+    this.playbackTimeMs = this.selectedSena.frames[this.currentFrameIndex].timestamp_ms;
+    this.lastTickTime = performance.now();
   }
 
   /**
@@ -119,25 +139,49 @@ export class CatalogoPlayerService {
     const totalFrames = frames.length;
     let hasLooped = false;
 
+    const [start, end] = this.getSegmentBounds(this.selectedSena);
+    const firstTime = frames[start].timestamp_ms;
+    const finalDuration = frames[end + 1] ? frames[end + 1].timestamp_ms - frames[end].timestamp_ms : 1000 / (this.selectedSena.metadatos_grabacion.fps || 30);
+    const duration = Math.max(1, frames[end].timestamp_ms + finalDuration - firstTime);
     if (this.isPlaying) {
-      const elapsed = timestamp - this.lastTickTime;
-      const targetFps = this.selectedSena.metadatos_grabacion.fps || 30;
-      const frameDurationMs = (1000 / targetFps) / this.playbackSpeed;
-
-      if (elapsed >= frameDurationMs) {
-        const framesToAdvance = Math.floor(elapsed / frameDurationMs);
-        this.currentFrameIndex += framesToAdvance;
-        this.lastTickTime = timestamp - (elapsed % frameDurationMs);
-
-        if (this.currentFrameIndex >= totalFrames) {
-          this.currentFrameIndex = 0; // Reproducción continua en bucle
-          hasLooped = true;
+      this.playbackTimeMs += Math.max(0, timestamp - this.lastTickTime) * this.playbackSpeed;
+      if (this.playbackTimeMs >= firstTime + duration) {
+        this.playbackTimeMs = firstTime + (this.playbackTimeMs - firstTime) % duration;
+        hasLooped = true;
+      }
+    }
+    this.lastTickTime = timestamp;
+    this.currentFrameIndex = start;
+    while (this.currentFrameIndex < end && frames[this.currentFrameIndex + 1].timestamp_ms <= this.playbackTimeMs) this.currentFrameIndex++;
+    const currentFrame = frames[this.currentFrameIndex];
+    const landmarks = this.mapFrameToLandmarks(currentFrame);
+    const next = frames[Math.min(end, this.currentFrameIndex + 1)];
+    const span = next.timestamp_ms - currentFrame.timestamp_ms;
+    if (span > 0) {
+      const alpha = Math.min(1, Math.max(0, (this.playbackTimeMs - currentFrame.timestamp_ms) / span));
+      const following = this.mapFrameToLandmarks(next);
+      for (const key of ['pose', 'poseWorld', 'rightHand', 'leftHand'] as const) {
+        const points = landmarks[key], nextPoints = following[key];
+        if (points && nextPoints && points.length === nextPoints.length) landmarks[key] = points.map((p, i) => ({
+          x: p.x + (nextPoints[i].x - p.x) * alpha,
+          y: p.y + (nextPoints[i].y - p.y) * alpha,
+          z: (p.z ?? 0) + ((nextPoints[i].z ?? 0) - (p.z ?? 0)) * alpha,
+          visibility: Math.min(p.visibility ?? 1, nextPoints[i].visibility ?? 1)
+        }));
+      }
+      if (landmarks.blendshapes && following.blendshapes) {
+        for (const key of new Set([...Object.keys(landmarks.blendshapes), ...Object.keys(following.blendshapes)])) {
+          const a = landmarks.blendshapes[key] ?? 0;
+          landmarks.blendshapes[key] = a + ((following.blendshapes[key] ?? 0) - a) * alpha;
+        }
+      }
+      if (landmarks.vrmPoseOverride && following.vrmPoseOverride) {
+        for (const [name, q] of Object.entries(landmarks.vrmPoseOverride)) {
+          const after = following.vrmPoseOverride[name];
+          if (after) landmarks.vrmPoseOverride[name] = new Quaternion(...q).normalize().slerp(new Quaternion(...after).normalize(), alpha).toArray() as [number, number, number, number];
         }
       }
     }
-
-    const currentFrame = frames[this.currentFrameIndex] || frames[0];
-    const landmarks = this.mapFrameToLandmarks(currentFrame);
 
     return {
       landmarks,
@@ -150,6 +194,13 @@ export class CatalogoPlayerService {
   /**
    * Mapea un FrameCapturaSchema a HolisticFrameLandmarks para el solver y renderer.
    */
+  private getSegmentBounds(sena: ReferenciaSenaData): [number, number] {
+    const last = sena.frames.length - 1;
+    const start = Math.max(0, Math.min(last, Math.trunc(sena.segmentacion.frame_inicio_sena) || 0));
+    const end = Math.max(start, Math.min(last, Math.trunc(sena.segmentacion.frame_fin_sena) || 0));
+    return [start, end];
+  }
+
   private mapFrameToLandmarks(frame: FrameCapturaSchema): HolisticFrameLandmarks {
     const result: HolisticFrameLandmarks = {};
 

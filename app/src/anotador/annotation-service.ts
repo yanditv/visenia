@@ -170,15 +170,18 @@ export class AnnotationService {
     prosoponemaRequerido: boolean;
     frames?: FrameCapturaSchema[];
   }): ReferenciaSenaData {
-    const framesToUse = config.frames ?? this.frames;
-    const totalFrames = Math.max(1, framesToUse.length);
-    const duracionMs = framesToUse.length > 0
-      ? framesToUse[framesToUse.length - 1].timestamp_ms
-      : 1000;
-
-    const fps = duracionMs > 0
-      ? Math.max(15, Math.round((totalFrames / (duracionMs / 1000)) * 10) / 10)
-      : 30;
+    const source = config.frames ?? this.frames;
+    const start = Math.max(0, Math.min(source.length - 1, Math.trunc(config.frameInicioSena)));
+    const end = Math.max(start, Math.min(source.length - 1, Math.trunc(config.frameFinSena)));
+    const segment = source.slice(start, end + 1);
+    if (segment.length < 2) throw new Error('Selecciona al menos dos cuadros de la seña.');
+    const origin = segment[0].timestamp_ms;
+    const framesToUse = segment.map((frame, index) => ({ ...frame, frame_idx: index, timestamp_ms: frame.timestamp_ms - origin }));
+    const totalFrames = framesToUse.length;
+    const duracionMs = framesToUse[totalFrames - 1].timestamp_ms;
+    if (duracionMs <= 0 || framesToUse.some((f, i) => !Number.isFinite(f.timestamp_ms) || (i > 0 && f.timestamp_ms <= framesToUse[i - 1].timestamp_ms))) throw new Error('La captura contiene tiempos inválidos.');
+    const fps = (totalFrames - 1) * 1000 / duracionMs;
+    if (fps < 15) throw new Error('La captura no alcanza 15 fps. Repite la toma para conservar su velocidad real.');
 
     const cleanGlosa = config.glosa.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const id = `ref-${cleanGlosa || 'sena'}-${Date.now().toString().slice(-6)}`;
@@ -199,8 +202,8 @@ export class AnnotationService {
       },
       segmentacion: {
         frame_inicio_preparacion: 0,
-        frame_inicio_sena: Math.max(0, Math.min(config.frameInicioSena, totalFrames - 1)),
-        frame_fin_sena: Math.max(0, Math.min(config.frameFinSena, totalFrames - 1)),
+        frame_inicio_sena: 0,
+        frame_fin_sena: totalFrames - 1,
         frame_retorno: totalFrames - 1
       },
       parametros_fonologicos: {
