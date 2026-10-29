@@ -220,7 +220,7 @@ body {
   color: var(--text-muted);
 }
 
-/* ─── Panel avatar y reproductor (RF-07, RF-08) ─── */
+/* ─── Panel avatar y reproductor ─── */
 .avatar-header-bar {
   display: flex;
   justify-content: space-between;
@@ -287,34 +287,7 @@ body {
   box-shadow: 0 1px 4px rgba(59, 130, 246, 0.4);
 }
 
-.avatar-hand-overlay {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 130px !important;
-  height: 130px !important;
-  z-index: 10;
-  background-color: rgba(15, 23, 42, 0.82);
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  border-radius: 10px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  pointer-events: none;
-}
 
-.avatar-hand-badge {
-  position: absolute;
-  bottom: 12px;
-  right: 12px;
-  z-index: 10;
-  background-color: rgba(15, 23, 42, 0.88);
-  border: 1px solid var(--border-color);
-  padding: 0.3rem 0.6rem;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-family: monospace;
-  color: #86efac;
-  pointer-events: none;
-}
 
 .fonologia-badge {
   background-color: #1e3a8a;
@@ -443,7 +416,7 @@ body {
   background-color: #475569;
 }
 
-/* ─── Drawer / Panel de Anotador (RF-36) ────────── */
+/* ─── Drawer / Panel de Anotador ─────────────────── */
 .anotador-drawer {
   position: absolute;
   top: 55px;

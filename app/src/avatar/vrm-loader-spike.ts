@@ -191,13 +191,15 @@ export class VrmAvatarViewer {
     const leftArmRestQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, 1.32));
     const identQuat = new THREE.Quaternion();
 
-    // ─── 1. Brazo ubicado a la izquierda de la pantalla (RightUpperArm/RightLowerArm del VRM) ───
-    // En cámara frontal con espejo, este corresponde a la mitad x < 0.5 (pose[12] hombro der, pose[14] codo der)
-    if (pose && pose[12] && pose[14] && (pose[12].visibility ?? 1.0) > 0.25 && (pose[14].visibility ?? 1.0) > 0.25) {
-      // Inversión explícita del eje Y: en canvas Y crece hacia abajo; en Three.js Y positivo es arriba
-      const udx = pose[14].x - pose[12].x;
-      const udy = -(pose[14].y - pose[12].y);
-      const udz = -((pose[14].z ?? 0) - (pose[12].z ?? 0));
+    // ─── 1. Brazo ubicado a la izquierda de la pantalla (Screen-Left) ───
+    // En la cámara con transform: scaleX(-1), el brazo en el lado izquierdo de la pantalla
+    // corresponde al hombro izquierdo (pose[11]) y codo izquierdo (pose[13]).
+    // En el avatar 3D visto de frente, su brazo en el lado izquierdo de la pantalla es RightUpperArm / RightLowerArm.
+    if (pose && pose[11] && pose[13] && (pose[11].visibility ?? 1.0) > 0.25 && (pose[13].visibility ?? 1.0) > 0.25) {
+      // Inversión horizontal para coherencia con scaleX(-1) e inversión vertical para espacio Three.js (+Y arriba)
+      const udx = -(pose[13].x - pose[11].x);
+      const udy = -(pose[13].y - pose[11].y);
+      const udz = -((pose[13].z ?? 0) - (pose[11].z ?? 0));
       const vUpper = new THREE.Vector3(udx, udy, udz).normalize();
 
       // RightUpperArm en VRM T-Pose apunta hacia (-1, 0, 0)
@@ -205,11 +207,11 @@ export class VrmAvatarViewer {
       this.rigBoneQuat(VRMHumanBoneName.RightUpperArm, qUpper, 0.45);
 
       // Antebrazo (codo a muñeca)
-      const wrist = (landmarks.rightHand && landmarks.rightHand[0]) ? landmarks.rightHand[0] : pose[16];
+      const wrist = (landmarks.leftHand && landmarks.leftHand[0]) ? landmarks.leftHand[0] : pose[15];
       if (wrist && (wrist.visibility ?? 1.0) > 0.25) {
-        const fdx = wrist.x - pose[14].x;
-        const fdy = -(wrist.y - pose[14].y); // Inversión de Y en antebrazo
-        const fdz = -((wrist.z ?? 0) - (pose[14].z ?? 0));
+        const fdx = -(wrist.x - pose[13].x);
+        const fdy = -(wrist.y - pose[13].y);
+        const fdz = -((wrist.z ?? 0) - (pose[13].z ?? 0));
         const vForearm = new THREE.Vector3(fdx, fdy, fdz).normalize();
 
         const vLocal = vForearm.clone().applyQuaternion(qUpper.clone().invert());
@@ -219,17 +221,19 @@ export class VrmAvatarViewer {
         this.rigBoneQuat(VRMHumanBoneName.RightLowerArm, identQuat, 0.25);
       }
     } else {
-      // Si el brazo sale de la cámara, interpolación suave a reposo (no se congela en el aire)
+      // Si el brazo sale de la cámara, interpolación suave a postura de descanso (evita congelamiento)
       this.rigBoneQuat(VRMHumanBoneName.RightUpperArm, rightArmRestQuat, 0.2);
       this.rigBoneQuat(VRMHumanBoneName.RightLowerArm, identQuat, 0.25);
     }
 
-    // ─── 2. Brazo ubicado a la derecha de la pantalla (LeftUpperArm/LeftLowerArm del VRM) ───
-    // En cámara frontal con espejo, este corresponde a la mitad x > 0.5 (pose[11] hombro izq, pose[13] codo izq)
-    if (pose && pose[11] && pose[13] && (pose[11].visibility ?? 1.0) > 0.25 && (pose[13].visibility ?? 1.0) > 0.25) {
-      const udx = pose[13].x - pose[11].x;
-      const udy = -(pose[13].y - pose[11].y);
-      const udz = -((pose[13].z ?? 0) - (pose[11].z ?? 0));
+    // ─── 2. Brazo ubicado a la derecha de la pantalla (Screen-Right) ───
+    // En la cámara con transform: scaleX(-1), el brazo en el lado derecho de la pantalla
+    // corresponde al hombro derecho (pose[12]) y codo derecho (pose[14]).
+    // En el avatar 3D visto de frente, su brazo en el lado derecho de la pantalla es LeftUpperArm / LeftLowerArm.
+    if (pose && pose[12] && pose[14] && (pose[12].visibility ?? 1.0) > 0.25 && (pose[14].visibility ?? 1.0) > 0.25) {
+      const udx = -(pose[14].x - pose[12].x);
+      const udy = -(pose[14].y - pose[12].y);
+      const udz = -((pose[14].z ?? 0) - (pose[12].z ?? 0));
       const vUpper = new THREE.Vector3(udx, udy, udz).normalize();
 
       // LeftUpperArm en VRM T-Pose apunta hacia (1, 0, 0)
@@ -237,11 +241,11 @@ export class VrmAvatarViewer {
       this.rigBoneQuat(VRMHumanBoneName.LeftUpperArm, qUpper, 0.45);
 
       // Antebrazo
-      const wrist = (landmarks.leftHand && landmarks.leftHand[0]) ? landmarks.leftHand[0] : pose[15];
+      const wrist = (landmarks.rightHand && landmarks.rightHand[0]) ? landmarks.rightHand[0] : pose[16];
       if (wrist && (wrist.visibility ?? 1.0) > 0.25) {
-        const fdx = wrist.x - pose[13].x;
-        const fdy = -(wrist.y - pose[13].y);
-        const fdz = -((wrist.z ?? 0) - (pose[13].z ?? 0));
+        const fdx = -(wrist.x - pose[14].x);
+        const fdy = -(wrist.y - pose[14].y);
+        const fdz = -((wrist.z ?? 0) - (pose[14].z ?? 0));
         const vForearm = new THREE.Vector3(fdx, fdy, fdz).normalize();
 
         const vLocal = vForearm.clone().applyQuaternion(qUpper.clone().invert());
@@ -256,16 +260,16 @@ export class VrmAvatarViewer {
       this.rigBoneQuat(VRMHumanBoneName.LeftLowerArm, identQuat, 0.25);
     }
 
-    // ─── 3. Articulación fonológica de mano derecha (21 puntos) ───
-    if (landmarks.rightHand && landmarks.rightHand.length === 21) {
-      this.applyFingerArticulations(landmarks.rightHand, 'right');
+    // ─── 3. Articulación de dedos en brazo izquierdo de la pantalla (RightHand del VRM) ───
+    if (landmarks.leftHand && landmarks.leftHand.length === 21) {
+      this.applyFingerArticulations(landmarks.leftHand, 'right');
     } else {
       this.relaxFingers('right');
     }
 
-    // ─── 4. Articulación fonológica de mano izquierda (21 puntos) ───
-    if (landmarks.leftHand && landmarks.leftHand.length === 21) {
-      this.applyFingerArticulations(landmarks.leftHand, 'left');
+    // ─── 4. Articulación de dedos en brazo derecho de la pantalla (LeftHand del VRM) ───
+    if (landmarks.rightHand && landmarks.rightHand.length === 21) {
+      this.applyFingerArticulations(landmarks.rightHand, 'left');
     } else {
       this.relaxFingers('left');
     }
@@ -311,15 +315,15 @@ export class VrmAvatarViewer {
       side === 'right' ? VRMHumanBoneName.RightHand : VRMHumanBoneName.LeftHand
     );
 
-    // Orientación de la palma y muñeca
+    // Orientación de la palma y muñeca (espejada en X, invertida en Y)
     if (wristNode && hand[0] && hand[9] && hand[5] && hand[17]) {
-      const hdx = hand[9].x - hand[0].x;
+      const hdx = -(hand[9].x - hand[0].x);
       const hdy = -(hand[9].y - hand[0].y); // Inversión Y
       const hdz = -((hand[9].z ?? 0) - (hand[0].z ?? 0));
       const handHeading = new THREE.Vector3(hdx, hdy, hdz).normalize();
 
-      const vIndex = new THREE.Vector3(hand[5].x - hand[0].x, -(hand[5].y - hand[0].y), 0);
-      const vPinky = new THREE.Vector3(hand[17].x - hand[0].x, -(hand[17].y - hand[0].y), 0);
+      const vIndex = new THREE.Vector3(-(hand[5].x - hand[0].x), -(hand[5].y - hand[0].y), 0);
+      const vPinky = new THREE.Vector3(-(hand[17].x - hand[0].x), -(hand[17].y - hand[0].y), 0);
       const palmNormal = new THREE.Vector3().crossVectors(vIndex, vPinky).normalize();
 
       const wristAngleZ = Math.atan2(handHeading.y, Math.abs(handHeading.x) + 1e-4) * 0.5 * sign;

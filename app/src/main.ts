@@ -1,15 +1,15 @@
 /**
  * Punto de entrada principal de la PWA Viseña — Espejo Digital + Avatar Guía + Catálogo + Anotador
- * Sprint 1 (RF-01, RF-02, RF-07, RF-08, RF-36, RF-42, ADR-002)
+ * Sprint 1
  *
  * Características:
  *  - Panel izquierdo: espejo de práctica con inferencia MediaPipe GPU (Pose + Manos + Rostro)
- *  - Panel derecho: avatar VRM (visenia.vrm) con cinemática Three.js + Kalidokit
- *  - Catálogo y reproductor (RF-07, RF-08): reproduce señas de referencia a 1x y 0.5x
- *  - Anotador fonológico (RF-36): captura, segmentación y exportación de referencias JSON schema v1.1.0
+ *  - Panel derecho: avatar VRM (visenia.vrm) con cinemática Three.js
+ *  - Catálogo y reproductor: reproduce señas de referencia a 1x y 0.5x
+ *  - Anotador fonológico: captura, segmentación y exportación de referencias JSON schema v1.1.0
  */
 import { CameraService } from './camera/camera-service';
-import { SkeletonRenderer, HolisticFrameLandmarks, LandmarkPoint } from './render/skeleton-renderer';
+import { SkeletonRenderer, HolisticFrameLandmarks } from './render/skeleton-renderer';
 import { VisionService } from './vision/vision-service';
 import { VrmAvatarViewer, VRM_MODEL_URL } from './avatar/vrm-loader-spike';
 import { AnnotationService } from './anotador/annotation-service';
@@ -26,7 +26,7 @@ const btnToggleSynthetic = document.getElementById('btn-toggle-synthetic') as HT
 const avatarContainer = document.getElementById('avatar-container') as HTMLDivElement;
 const avatarLoading = document.getElementById('avatar-loading') as HTMLDivElement;
 
-// ─── Referencias del DOM: Catálogo y Reproductor (RF-07, RF-08) ─────────────
+// ─── Referencias del DOM: Catálogo y Reproductor ────────────────────────────
 const selectCatalogoSena = document.getElementById('select-catalogo-sena') as HTMLSelectElement;
 const fonologiaInfo = document.getElementById('fonologia-info') as HTMLSpanElement;
 const btnPlayerPlay = document.getElementById('btn-player-play') as HTMLButtonElement;
@@ -35,14 +35,12 @@ const sliderPlayerProgress = document.getElementById('slider-player-progress') a
 const playerTimeDisplay = document.getElementById('player-time-display') as HTMLSpanElement;
 const btnPlayerRestart = document.getElementById('btn-player-restart') as HTMLButtonElement;
 
-// ─── Referencias del DOM: Selector de Modo de Avatar y HUD de Mano (RF-07, RF-42) ──
+// ─── Referencias del DOM: Selector de Modo de Avatar (Guía vs Reflejo en Vivo) ──
 const btnModeGuia = document.getElementById('btn-mode-guia') as HTMLButtonElement;
 const btnModeEspejo = document.getElementById('btn-mode-espejo') as HTMLButtonElement;
-const avatarHandCanvas = document.getElementById('avatar-hand-canvas') as HTMLCanvasElement;
-const lblHandShape = document.getElementById('lbl-hand-shape') as HTMLSpanElement;
 let avatarDisplayMode: 'guia' | 'espejo' = 'guia';
 
-// ─── Referencias del DOM: Tabs y Drawer Anotador (RF-36) ─────────────────────
+// ─── Referencias del DOM: Tabs y Drawer Anotador ────────────────────────────
 const tabPractica = document.getElementById('tab-practica') as HTMLButtonElement;
 const tabAnotador = document.getElementById('tab-anotador') as HTMLButtonElement;
 const anotadorDrawer = document.getElementById('anotador-drawer') as HTMLElement;
@@ -89,7 +87,7 @@ avatarViewer
     avatarLoading.querySelector('.avatar-loading-text')!.textContent = 'Error al cargar avatar';
   });
 
-// ─── Inicialización del Catálogo de Señas (RF-07) ─────────────────────────────
+// ─── Inicialización del Catálogo de Señas ───────────────────────────────────
 catalogoService.loadCatalog().then((senas) => {
   selectCatalogoSena.innerHTML = '';
   if (senas.length === 0) {
@@ -131,7 +129,7 @@ selectCatalogoSena.addEventListener('change', () => {
   }
 });
 
-// ─── Controles del Reproductor (RF-08) ───────────────────────────────────────
+// ─── Controles del Reproductor ──────────────────────────────────────────────
 btnPlayerPlay.addEventListener('click', () => {
   const isNowPlaying = catalogoService.togglePlay();
   if (isNowPlaying) {
@@ -171,7 +169,7 @@ btnPlayerRestart.addEventListener('click', () => {
   btnPlayerPlay.classList.add('playing');
 });
 
-// ─── Selector de Modo de Avatar (RF-07 vs RF-42) ─────────────────────────────
+// ─── Selector de Modo de Avatar (Guía vs Reflejo en Vivo) ───────────────────
 btnModeGuia?.addEventListener('click', () => {
   avatarDisplayMode = 'guia';
   btnModeGuia.classList.add('active');
@@ -187,113 +185,6 @@ btnModeEspejo?.addEventListener('click', () => {
   btnModeEspejo.classList.add('active');
   btnModeGuia.classList.remove('active');
 });
-
-// ─── Renderizador de Trazos Articulados de Manos (Queirema HUD) ───────────────
-function renderHandHud(
-  canvasEl: HTMLCanvasElement | null,
-  badgeEl: HTMLSpanElement | null,
-  handPoints?: LandmarkPoint[]
-): void {
-  if (!canvasEl || !badgeEl) return;
-  const ctx = canvasEl.getContext('2d');
-  if (!ctx) return;
-
-  const w = (canvasEl.width = 130);
-  const h = (canvasEl.height = 130);
-  ctx.clearRect(0, 0, w, h);
-
-  if (!handPoints || handPoints.length < 21) {
-    badgeEl.textContent = 'Mano no detectada';
-    badgeEl.style.color = '#94a3b8';
-    return;
-  }
-
-  // Bounding box para centrar y escalar los 21 puntos
-  let minX = 1, maxX = 0, minY = 1, maxY = 0;
-  for (const pt of handPoints) {
-    minX = Math.min(minX, pt.x);
-    maxX = Math.max(maxX, pt.x);
-    minY = Math.min(minY, pt.y);
-    maxY = Math.max(maxY, pt.y);
-  }
-
-  const rangeX = Math.max(maxX - minX, 0.05);
-  const rangeY = Math.max(maxY - minY, 0.05);
-  const scale = Math.min((w - 28) / rangeX, (h - 28) / rangeY);
-  const offsetX = (w - rangeX * scale) / 2 - minX * scale;
-  const offsetY = (h - rangeY * scale) / 2 - minY * scale;
-
-  const toPx = (pt: LandmarkPoint) => ({
-    x: pt.x * scale + offsetX,
-    y: pt.y * scale + offsetY
-  });
-
-  // Conexiones de dedos
-  const fingerBones: Array<{ indices: [number, number]; color: string }> = [
-    // Pulgar
-    { indices: [0, 1], color: '#facc15' }, { indices: [1, 2], color: '#facc15' },
-    { indices: [2, 3], color: '#facc15' }, { indices: [3, 4], color: '#facc15' },
-    // Índice
-    { indices: [0, 5], color: '#4ade80' }, { indices: [5, 6], color: '#4ade80' },
-    { indices: [6, 7], color: '#4ade80' }, { indices: [7, 8], color: '#4ade80' },
-    // Medio
-    { indices: [0, 9], color: '#38bdf8' }, { indices: [9, 10], color: '#38bdf8' },
-    { indices: [10, 11], color: '#38bdf8' }, { indices: [11, 12], color: '#38bdf8' },
-    // Anular
-    { indices: [0, 13], color: '#a855f7' }, { indices: [13, 14], color: '#a855f7' },
-    { indices: [14, 15], color: '#a855f7' }, { indices: [15, 16], color: '#a855f7' },
-    // Meñique
-    { indices: [0, 17], color: '#f472b6' }, { indices: [17, 18], color: '#f472b6' },
-    { indices: [18, 19], color: '#f472b6' }, { indices: [19, 20], color: '#f472b6' }
-  ];
-
-  ctx.lineWidth = 2.5;
-  ctx.lineCap = 'round';
-  for (const bone of fingerBones) {
-    const p1 = toPx(handPoints[bone.indices[0]]);
-    const p2 = toPx(handPoints[bone.indices[1]]);
-    ctx.strokeStyle = bone.color;
-    ctx.beginPath();
-    ctx.moveTo(p1.x, p1.y);
-    ctx.lineTo(p2.x, p2.y);
-    ctx.stroke();
-  }
-
-  // Puntos articulares
-  ctx.fillStyle = '#ffffff';
-  for (let i = 0; i < 21; i++) {
-    const p = toPx(handPoints[i]);
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, i === 0 || i % 4 === 0 ? 3.5 : 2, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Clasificación fonológica del Queirema
-  const dWrist = (idx: number) => Math.hypot(handPoints[idx].x - handPoints[0].x, handPoints[idx].y - handPoints[0].y);
-  const extIndex = dWrist(8) > dWrist(5) * 1.35;
-  const extMiddle = dWrist(12) > dWrist(9) * 1.35;
-  const extRing = dWrist(16) > dWrist(13) * 1.35;
-  const extLittle = dWrist(20) > dWrist(17) * 1.35;
-
-  let queiremaName = 'Mano Articulada';
-  if (extIndex && extMiddle && extRing && extLittle) {
-    queiremaName = 'Forma: Mano Abierta (5 extendidos)';
-    badgeEl.style.color = '#86efac';
-  } else if (!extIndex && !extMiddle && !extRing && !extLittle) {
-    queiremaName = 'Forma: Puño cerrado (S)';
-    badgeEl.style.color = '#fde047';
-  } else if (extIndex && !extMiddle && !extRing && !extLittle) {
-    queiremaName = 'Forma: 1 (Índice)';
-    badgeEl.style.color = '#38bdf8';
-  } else if (extIndex && extMiddle && !extRing && !extLittle) {
-    queiremaName = 'Forma: V (Dos dedos)';
-    badgeEl.style.color = '#c084fc';
-  } else {
-    queiremaName = 'Forma: Parcial / Transición';
-    badgeEl.style.color = '#93c5fd';
-  }
-  badgeEl.textContent = queiremaName;
-}
 
 // ─── Estado de la app ────────────────────────────────────────────────────────
 let isSimulating = false;
@@ -365,31 +256,24 @@ function animationLoop(timestamp: number) {
     renderer.clear();
   }
 
-  // 3. Control de animación del Avatar 3D (Separación coherente: Guía RF-07 vs Reflejo en Vivo RF-42)
-  let activeHandForHud: LandmarkPoint[] | undefined;
-
+  // 3. Control de animación del Avatar 3D (Modo Guía vs Modo Reflejo en Vivo)
   if (avatarDisplayMode === 'guia') {
-    // MODO GUÍA (RF-07, RF-08): el avatar demuestra la seña de referencia canónica del catálogo.
+    // MODO GUÍA: el avatar demuestra la seña de referencia canónica del catálogo.
     // NUNCA es sobreescrito por la cámara del usuario mientras esté en modo guía.
     const guideUpdate = catalogoService.update(timestamp);
     if (guideUpdate.landmarks) {
       avatarViewer.updatePose(guideUpdate.landmarks);
       sliderPlayerProgress.value = guideUpdate.frameIndex.toString();
       playerTimeDisplay.textContent = `${guideUpdate.frameIndex}/${guideUpdate.totalFrames}`;
-      activeHandForHud = guideUpdate.landmarks.rightHand || guideUpdate.landmarks.leftHand;
     }
   } else {
-    // MODO REFLEJO EN VIVO (RF-42): el avatar actúa como espejo 3D del usuario en tiempo real
+    // MODO REFLEJO EN VIVO: el avatar actúa como espejo 3D del usuario en tiempo real
     if (userLandmarks.pose || userLandmarks.rightHand || userLandmarks.leftHand) {
       avatarViewer.updatePose(userLandmarks);
-      activeHandForHud = userLandmarks.rightHand || userLandmarks.leftHand;
     } else {
       avatarViewer.updatePose({});
     }
   }
-
-  // 4. Actualizar trazos articulados de la mano (Queirema HUD)
-  renderHandHud(avatarHandCanvas, lblHandShape, activeHandForHud);
 
   void requestAnimationFrame(animationLoop);
 }
@@ -463,7 +347,7 @@ btnToggleSynthetic.addEventListener('click', () => {
   }
 });
 
-// ─── Lógica de Navegación Tabs & Drawer Anotador (RF-36) ──────────────────────
+// ─── Lógica de Navegación Tabs & Drawer Anotador ──────────────────────────────
 tabPractica.addEventListener('click', () => {
   tabPractica.classList.add('active');
   tabAnotador.classList.remove('active');
@@ -480,7 +364,7 @@ btnCerrarAnotador.addEventListener('click', () => {
   tabPractica.click();
 });
 
-// ─── Controles de Grabación de Seña (RF-36) ──────────────────────────────────
+// ─── Controles de Grabación de Seña ──────────────────────────────────────────
 btnRecordSena.addEventListener('click', () => {
   if (!annotationService.getIsRecording()) {
     if (!cameraService.isRunning() && !isSimulating) {
