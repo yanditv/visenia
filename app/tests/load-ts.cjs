@@ -9,11 +9,17 @@ module.exports = function loadTs(relativePath) {
   const exports = {};
   cache.set(filename, exports);
   const code = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   new Function('require', 'exports', code)((name) => {
     if (name.includes('GLTFLoader') || name === '@mediapipe/tasks-vision') return {};
-    if (name.startsWith('.')) return module.exports(path.relative(path.resolve(__dirname, '..'), path.resolve(path.dirname(filename), name + '.ts')));
+    if (name.startsWith('.'))
+      return module.exports(
+        path.relative(
+          path.resolve(__dirname, '..'),
+          path.resolve(path.dirname(filename), name + '.ts')
+        )
+      );
     return require(name);
   }, exports);
   return exports;

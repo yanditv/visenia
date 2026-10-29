@@ -1,213 +1,271 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0f172a" />
-  <meta name="description" content="Espejo y Catálogo de Práctica de Lengua de Señas - Viseña (Sprint 1)" />
-  <link rel="manifest" href="/manifest.json" />
-  <title>Viseña - Espejo, Catálogo y Avatar 3D (PWA)</title>
-  <link rel="stylesheet" href="/src/style.css" />
-</head>
-<body>
-  <div id="app">
-    <header class="app-header">
-      <div class="logo-area">
-        <h1>Viseña</h1>
-        <span class="badge">Sprint 1 • Práctica & Guía</span>
-      </div>
-
-      <nav class="nav-tabs" aria-label="Modos de la aplicación">
-        <button id="tab-practica" class="tab-btn active">🎯 Práctica & Catálogo</button>
-        <button id="tab-anotador" class="tab-btn">📝 Anotador de Señas</button>
-      </nav>
-
-      <div class="hud-stats">
-        <span id="fps-display">FPS: --</span>
-        <span id="status-display" class="status-indicator">Iniciando cámara...</span>
-      </div>
-    </header>
-
-    <!-- Layout dividido: Espejo usuario (izq) | Avatar guía y catálogo (der) -->
-    <main class="split-container">
-
-      <!-- Panel izquierdo: espejo del usuario -->
-      <section class="panel panel-usuario" aria-label="Espejo del usuario">
-        <div class="panel-label">Tú (Espejo de Práctica)</div>
-        <div class="viewport-wrapper">
-          <video id="webcam-video" autoplay playsinline muted></video>
-          <canvas id="skeleton-canvas"></canvas>
-
-          <div id="encuadre-overlay" class="encuadre-overlay">
-            <div class="encuadre-box">
-              <span class="encuadre-tip">Ubica tu torso y manos dentro del área</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Panel derecho: avatar guía VRM y reproductor de catálogo -->
-      <section class="panel panel-avatar" aria-label="Avatar guía y reproductor">
-        <div class="avatar-header-bar">
-          <div class="sena-selector-group">
-            <label for="select-catalogo-sena">Seña Guía:</label>
-            <select id="select-catalogo-sena" class="select-sena">
-              <option value="">Cargando catálogo...</option>
-            </select>
-          </div>
-          <div class="avatar-mode-segmented" role="tablist" aria-label="Modo de visualización del avatar">
-            <button id="btn-mode-guia" class="mode-btn active" title="Reproduce la seña canónica del catálogo de referencia">📖 Modo Guía</button>
-            <button id="btn-mode-espejo" class="mode-btn" title="El avatar refleja tu movimiento en tiempo real 3D">🪞 Reflejo en Vivo</button>
-          </div>
-          <div id="fonologia-badge" class="fonologia-badge">
-            <span id="fonologia-info">Toponema: -- • Mov: --</span>
-          </div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta
+      name="description"
+      content="Espejo y Catálogo de Práctica de Lengua de Señas - Viseña (Sprint 1)"
+    />
+    <link rel="manifest" href="/manifest.json" />
+    <title>Viseña - Espejo, Catálogo y Avatar 3D (PWA)</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="app-header">
+        <div class="logo-area">
+          <h1>Viseña</h1>
+          <span class="badge">Sprint 1 • Práctica & Guía</span>
         </div>
 
-        <div id="avatar-container" class="avatar-wrapper">
-          <div id="avatar-loading" class="avatar-loading">
-            <span class="avatar-loading-text">Cargando avatar…</span>
-          </div>
+        <nav class="nav-tabs" aria-label="Modos de la aplicación">
+          <button id="tab-practica" class="tab-btn active">🎯 Práctica & Catálogo</button>
+          <button id="tab-anotador" class="tab-btn">📝 Anotador de Señas</button>
+        </nav>
+
+        <div class="hud-stats">
+          <span id="fps-display">FPS: --</span>
+          <span id="status-display" class="status-indicator">Iniciando cámara...</span>
         </div>
+      </header>
 
-        <!-- Barra de reproducción interactiva -->
-        <div class="avatar-player-bar">
-          <button id="btn-player-play" class="btn btn-player-play">▶ Reproducir</button>
-          <button id="btn-player-speed" class="btn btn-player-speed" title="Alternar velocidad normal y lenta (1x / 0.5x)">1.0×</button>
-          <input type="range" id="slider-player-progress" class="player-progress" min="0" max="100" value="0" />
-          <span id="player-time-display" class="player-time">0/0</span>
-          <button id="btn-player-restart" class="btn btn-player-icon" title="Reiniciar seña">↺</button>
-        </div>
-      </section>
+      <!-- Layout dividido: Espejo usuario (izq) | Avatar guía y catálogo (der) -->
+      <main class="split-container">
+        <!-- Panel izquierdo: espejo del usuario -->
+        <section class="panel panel-usuario" aria-label="Espejo del usuario">
+          <div class="panel-label">Tú (Espejo de Práctica)</div>
+          <div class="viewport-wrapper">
+            <video id="webcam-video" autoplay playsinline muted></video>
+            <canvas id="skeleton-canvas"></canvas>
 
-    </main>
-
-    <!-- Panel de Anotación Fonológica (Expandible / Drawer) -->
-    <section id="anotador-drawer" class="anotador-drawer oculto" aria-label="Herramienta de Anotación Fonológica">
-      <div class="drawer-header">
-        <h2>Herramienta de Anotación de Referencia</h2>
-        <button id="btn-cerrar-anotador" class="btn-icon" aria-label="Cerrar anotador">✕</button>
-      </div>
-
-      <div class="drawer-body">
-        <!-- 1. Captura y Grabación -->
-        <div class="anotador-card">
-          <h3>1. Grabación Temporal</h3>
-          <div class="grabacion-controls">
-            <button id="btn-record-sena" class="btn btn-record">⏺ Grabar Seña</button>
-            <div class="grabacion-info">
-              <span id="record-status">En espera</span>
-              <span id="record-counter">Frames: 0 | 0.0s</span>
+            <div id="encuadre-overlay" class="encuadre-overlay">
+              <div class="encuadre-box">
+                <span class="encuadre-tip">Ubica tu torso y manos dentro del área</span>
+              </div>
             </div>
           </div>
+        </section>
 
-          <div class="segmentacion-section">
-            <label>Segmentación Fonológica (Frames):</label>
-            <div class="slider-group">
-              <span>Inicio: <strong id="lbl-frame-inicio">0</strong></span>
-              <input type="range" id="slider-frame-inicio" min="0" max="100" value="0" />
-            </div>
-            <div class="slider-group">
-              <span>Fin: <strong id="lbl-frame-fin">0</strong></span>
-              <input type="range" id="slider-frame-fin" min="0" max="100" value="0" />
-            </div>
-          </div>
-        </div>
-
-        <!-- 2. Formulario de Parámetros Fonológicos (Stokoe / ERS 6.1) -->
-        <div class="anotador-card">
-          <h3>2. Parámetros Fonológicos (ERS 6.1)</h3>
-          <div class="form-grid">
-            <div class="form-field">
-              <label for="input-glosa">Glosa (Seña):</label>
-              <input type="text" id="input-glosa" placeholder="Ej: GRACIAS, HOLA" value="HOLA" />
-            </div>
-
-            <div class="form-field">
-              <label for="select-unidad">Unidad Temática (1-12):</label>
-              <input type="number" id="select-unidad" min="1" max="12" value="1" />
-            </div>
-
-            <div class="form-field">
-              <label for="select-dificultad">Dificultad:</label>
-              <select id="select-dificultad">
-                <option value="facil" selected>Fácil</option>
-                <option value="intermedio">Intermedio</option>
-                <option value="avanzado">Avanzado</option>
+        <!-- Panel derecho: avatar guía VRM y reproductor de catálogo -->
+        <section class="panel panel-avatar" aria-label="Avatar guía y reproductor">
+          <div class="avatar-header-bar">
+            <div class="sena-selector-group">
+              <label for="select-catalogo-sena">Seña Guía:</label>
+              <select id="select-catalogo-sena" class="select-sena">
+                <option value="">Cargando catálogo...</option>
               </select>
             </div>
-
-            <div class="form-field">
-              <label for="select-mano-dom">Mano Dominante:</label>
-              <select id="select-mano-dom">
-                <option value="derecha" selected>Derecha</option>
-                <option value="izquierda">Izquierda</option>
-                <option value="ambas">Ambas</option>
-              </select>
+            <div
+              class="avatar-mode-segmented"
+              role="group"
+              aria-label="Modo de visualización del avatar"
+            >
+              <button
+                id="btn-mode-guia"
+                aria-pressed="true"
+                class="mode-btn active"
+                title="Reproduce la seña canónica del catálogo de referencia"
+              >
+                📖 Modo Guía
+              </button>
+              <button
+                id="btn-mode-espejo"
+                aria-pressed="false"
+                class="mode-btn"
+                title="El avatar refleja tu movimiento en tiempo real 3D"
+              >
+                🪞 Reflejo en Vivo
+              </button>
             </div>
-
-            <div class="form-field">
-              <label for="select-toponema">Toponema (Zona Corporal):</label>
-              <select id="select-toponema">
-                <option value="neutro_espacio" selected>Espacio Neutro</option>
-                <option value="cabeza">Cabeza</option>
-                <option value="frente">Frente</option>
-                <option value="pecho">Pecho</option>
-                <option value="barbilla">Barbilla</option>
-                <option value="hombro">Hombro</option>
-                <option value="mano_base">Mano Base</option>
-              </select>
-            </div>
-
-            <div class="form-field">
-              <label for="select-kinesema">Kinesema (Movimiento):</label>
-              <select id="select-kinesema">
-                <option value="rectilineo" selected>Rectilíneo</option>
-                <option value="curvo">Curvo</option>
-                <option value="circular">Circular</option>
-                <option value="ondulatorio">Ondulatorio</option>
-                <option value="estatico">Estático</option>
-              </select>
-            </div>
-
-            <div class="form-field full-width">
-              <label for="input-queirema">Queirema (Configuración de la Mano):</label>
-              <input type="text" id="input-queirema" placeholder="Ej: mano_plana_dedos_juntos" value="mano_plana" />
-            </div>
-
-            <div class="form-field full-width">
-              <label>
-                <input type="checkbox" id="check-prosoponema" /> Prosoponema Requerido (Expresión Facial / No Manual)
-              </label>
+            <div id="fonologia-badge" class="fonologia-badge">
+              <span id="fonologia-info">Toponema: -- • Mov: --</span>
             </div>
           </div>
 
-          <div class="export-actions">
-            <button id="btn-export-json" class="btn btn-primary btn-large">
-              💾 Exportar JSON (referencia.schema.json v1.1.0)
+          <div id="avatar-container" class="avatar-wrapper">
+            <div id="avatar-loading" class="avatar-loading">
+              <span class="avatar-loading-text">Cargando avatar…</span>
+            </div>
+          </div>
+
+          <figure class="reference-skeleton">
+            <canvas
+              id="reference-skeleton-canvas"
+              width="640"
+              height="480"
+              role="img"
+              aria-label="Esqueleto de la seña del catálogo"
+            ></canvas>
+            <figcaption id="reference-status">Esqueleto de referencia</figcaption>
+          </figure>
+
+          <!-- Barra de reproducción interactiva -->
+          <div class="avatar-player-bar">
+            <button id="btn-player-play" class="btn btn-player-play">▶ Reproducir</button>
+            <button
+              id="btn-player-speed"
+              class="btn btn-player-speed"
+              title="Alternar velocidad normal y lenta (1x / 0.5x)"
+            >
+              1.0×
             </button>
-            <span id="export-msg" class="export-msg"></span>
+            <input
+              type="range"
+              id="slider-player-progress"
+              aria-label="Posición en la seña de referencia"
+              class="player-progress"
+              min="0"
+              max="100"
+              value="0"
+            />
+            <span id="player-time-display" class="player-time">0/0</span>
+            <button id="btn-player-restart" class="btn btn-player-icon" title="Reiniciar seña">
+              ↺
+            </button>
+          </div>
+        </section>
+      </main>
+
+      <!-- Panel de Anotación Fonológica (Expandible / Drawer) -->
+      <section
+        id="anotador-drawer"
+        class="anotador-drawer oculto"
+        aria-label="Herramienta de Anotación Fonológica"
+      >
+        <div class="drawer-header">
+          <h2>Herramienta de Anotación de Referencia</h2>
+          <button id="btn-cerrar-anotador" class="btn-icon" aria-label="Cerrar anotador">✕</button>
+        </div>
+
+        <div class="drawer-body">
+          <!-- 1. Captura y Grabación -->
+          <div class="anotador-card">
+            <h3>1. Grabación Temporal</h3>
+            <div class="grabacion-controls">
+              <button id="btn-record-sena" class="btn btn-record">⏺ Grabar Seña</button>
+              <div class="grabacion-info">
+                <span id="record-status">En espera</span>
+                <span id="record-counter">Frames: 0 | 0.0s</span>
+              </div>
+            </div>
+
+            <div class="segmentacion-section">
+              <label>Segmentación Fonológica (Frames):</label>
+              <div class="slider-group">
+                <span>Inicio: <strong id="lbl-frame-inicio">0</strong></span>
+                <input type="range" id="slider-frame-inicio" min="0" max="100" value="0" />
+              </div>
+              <div class="slider-group">
+                <span>Fin: <strong id="lbl-frame-fin">0</strong></span>
+                <input type="range" id="slider-frame-fin" min="0" max="100" value="0" />
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Formulario de Parámetros Fonológicos (Stokoe / ERS 6.1) -->
+          <div class="anotador-card">
+            <h3>2. Parámetros Fonológicos (ERS 6.1)</h3>
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="input-glosa">Glosa (Seña):</label>
+                <input type="text" id="input-glosa" placeholder="Ej: GRACIAS, HOLA" value="HOLA" />
+              </div>
+
+              <div class="form-field">
+                <label for="select-unidad">Unidad Temática (1-12):</label>
+                <input type="number" id="select-unidad" min="1" max="12" value="1" />
+              </div>
+
+              <div class="form-field">
+                <label for="select-dificultad">Dificultad:</label>
+                <select id="select-dificultad">
+                  <option value="facil" selected>Fácil</option>
+                  <option value="intermedio">Intermedio</option>
+                  <option value="avanzado">Avanzado</option>
+                </select>
+              </div>
+
+              <div class="form-field">
+                <label for="select-mano-dom">Mano Dominante:</label>
+                <select id="select-mano-dom">
+                  <option value="derecha" selected>Derecha</option>
+                  <option value="izquierda">Izquierda</option>
+                  <option value="ambas">Ambas</option>
+                </select>
+              </div>
+
+              <div class="form-field">
+                <label for="select-toponema">Toponema (Zona Corporal):</label>
+                <select id="select-toponema">
+                  <option value="neutro_espacio" selected>Espacio Neutro</option>
+                  <option value="cabeza">Cabeza</option>
+                  <option value="frente">Frente</option>
+                  <option value="pecho">Pecho</option>
+                  <option value="barbilla">Barbilla</option>
+                  <option value="hombro">Hombro</option>
+                  <option value="mano_base">Mano Base</option>
+                </select>
+              </div>
+
+              <div class="form-field">
+                <label for="select-kinesema">Kinesema (Movimiento):</label>
+                <select id="select-kinesema">
+                  <option value="rectilineo" selected>Rectilíneo</option>
+                  <option value="curvo">Curvo</option>
+                  <option value="circular">Circular</option>
+                  <option value="ondulatorio">Ondulatorio</option>
+                  <option value="estatico">Estático</option>
+                </select>
+              </div>
+
+              <div class="form-field full-width">
+                <label for="input-queirema">Queirema (Configuración de la Mano):</label>
+                <input
+                  type="text"
+                  id="input-queirema"
+                  placeholder="Ej: mano_plana_dedos_juntos"
+                  value="mano_plana"
+                />
+              </div>
+
+              <div class="form-field full-width">
+                <label>
+                  <input type="checkbox" id="check-prosoponema" /> Prosoponema Requerido (Expresión
+                  Facial / No Manual)
+                </label>
+              </div>
+            </div>
+
+            <div class="export-actions">
+              <button id="btn-export-json" class="btn btn-primary btn-large">
+                💾 Exportar JSON (referencia.schema.json v1.1.0)
+              </button>
+              <span id="export-msg" class="export-msg"></span>
+            </div>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- Controles globales de cámara y leyenda -->
-    <div class="controls-panel">
-      <button id="btn-toggle-camera" class="btn btn-primary">Encender Cámara</button>
-      <button id="btn-toggle-synthetic" class="btn btn-secondary">Modo Simulación (Spike)</button>
-      <div class="legend">
-        <span class="dot pose-dot"></span> Torso / Pose
-        <span class="dot hand-dot"></span> Manos (21 pts)
-        <span class="dot face-dot"></span> Rostro
+      <!-- Controles globales de cámara y leyenda -->
+      <div class="controls-panel">
+        <button id="btn-toggle-camera" class="btn btn-primary">Encender Cámara</button>
+        <button id="btn-toggle-synthetic" class="btn btn-secondary">Modo Simulación (Spike)</button>
+        <div class="legend">
+          <span class="dot pose-dot"></span> Torso / Pose <span class="dot hand-dot"></span> Manos
+          (21 pts) <span class="dot face-dot"></span> Rostro
+        </div>
       </div>
+
+      <footer class="app-footer">
+        <small
+          >Proyecto Viseña — Fondo INVENTA • Desarrollador B (Lucas) • PWA Espejo Digital, Catálogo
+          & Avatar VRM</small
+        >
+      </footer>
     </div>
 
-    <footer class="app-footer">
-      <small>Proyecto Viseña — Fondo INVENTA • Desarrollador B (Lucas) • PWA Espejo Digital, Catálogo & Avatar VRM</small>
-    </footer>
-  </div>
-
-  <script type="module" src="/src/main.ts"></script>
-</body>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>

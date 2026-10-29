@@ -1,7 +1,7 @@
 /**
- * Carga y control del Avatar VRM con Three.js y Kalidokit (RF-42, ADR-002)
+ * Carga y control del Avatar VRM con Three.js (RF-42, ADR-002)
  *
- * Sprint 1: Spike técnico de animación en tiempo real con Kalidokit.
+ * Retargeting directo sobre el humanoide normalizado, con coordenadas de captura coherentes.
  * Mapea:
  * - Pose superior (torso, hombros, codos, muñecas) desde pose_world + pose 2D
  * - Dedos (21 landmarks por mano -> 15 articulaciones VRM) y orientación de muñeca (HandSolver)
@@ -58,6 +58,7 @@ export class VrmAvatarViewer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.container.appendChild(this.renderer.domElement);
+    this.resize(w, h);
 
     // 4. Iluminación para resaltar manos y rostro del avatar
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.1);
@@ -97,7 +98,9 @@ export class VrmAvatarViewer {
         (gltf) => {
           const vrm = gltf.userData.vrm as VRM;
           if (!vrm) {
-            reject(new Error('[VrmAvatarViewer] El archivo cargado no contiene metadatos VRM válidos.'));
+            reject(
+              new Error('[VrmAvatarViewer] El archivo cargado no contiene metadatos VRM válidos.')
+            );
             return;
           }
 
@@ -153,12 +156,13 @@ export class VrmAvatarViewer {
       const elapsed = this.clock.getElapsedTime();
 
       if (this.currentVrm) {
-        const hasLiveInput = this.latestLandmarks && (
-          (this.latestLandmarks.pose && this.latestLandmarks.pose.length > 0) ||
-          (this.latestLandmarks.rightHand && this.latestLandmarks.rightHand.length === 21) ||
-          (this.latestLandmarks.leftHand && this.latestLandmarks.leftHand.length === 21) ||
-          !!this.latestLandmarks.vrmPoseOverride || !!this.latestLandmarks.blendshapes
-        );
+        const hasLiveInput =
+          this.latestLandmarks &&
+          ((this.latestLandmarks.pose && this.latestLandmarks.pose.length > 0) ||
+            (this.latestLandmarks.rightHand && this.latestLandmarks.rightHand.length === 21) ||
+            (this.latestLandmarks.leftHand && this.latestLandmarks.leftHand.length === 21) ||
+            !!this.latestLandmarks.vrmPoseOverride ||
+            !!this.latestLandmarks.blendshapes);
 
         if (hasLiveInput && this.latestLandmarks) {
           this.applyDirectMirrorKinematics(this.latestLandmarks);
@@ -188,32 +192,58 @@ export class VrmAvatarViewer {
    */
   private applyDirectMirrorKinematics(landmarks: HolisticFrameLandmarks): void {
     if (!this.currentVrm) return;
+    const overrides = landmarks.vrmPoseOverride ?? {};
+    // Release corrections when a later frame no longer includes that bone.
+    for (const name of this.overrideBones ?? []) {
+      if (!(name in overrides))
+        this.currentVrm.humanoid
+          .getNormalizedBoneNode(name as VRMHumanBoneName)
+          ?.quaternion.identity();
+    }
+    this.overrideBones = new Set(Object.keys(overrides));
     // Metric Pose and image Pose have separate scales; never subtract a Hand Z from a Pose Z.
     const metric = !!landmarks.poseWorld?.length;
     const pose = metric ? landmarks.poseWorld : landmarks.pose;
     const aspect = metric ? 1 : (landmarks.imageAspect ?? 1);
     const direction = (from: LandmarkPoint, to: LandmarkPoint) =>
-      new THREE.Vector3(-(to.x - from.x) * aspect, -(to.y - from.y), -((to.z ?? 0) - (from.z ?? 0)) * aspect);
+      new THREE.Vector3(
+        -(to.x - from.x) * aspect,
+        -(to.y - from.y),
+        -((to.z ?? 0) - (from.z ?? 0)) * aspect
+      );
     for (const [side, shoulder, elbow, wrist] of [
-      ['right', 11, 13, 15], ['left', 12, 14, 16]
+      ['right', 11, 13, 15],
+      ['left', 12, 14, 16],
     ] as const) {
       const axis = new THREE.Vector3(side === 'right' ? -1 : 1, 0, 0);
       const upperName = (side + 'UpperArm') as VRMHumanBoneName;
       const lowerName = (side + 'LowerArm') as VRMHumanBoneName;
-      const rest = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, side === 'right' ? 1.32 : -1.32));
+      const rest = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(0, 0, side === 'right' ? 1.32 : -1.32)
+      );
       const visible = (index: number) => pose?.[index] && (pose[index].visibility ?? 1) > 0.25;
       if (pose && visible(shoulder) && visible(elbow)) {
         const upperDirection = direction(pose[shoulder], pose[elbow]);
         if (upperDirection.lengthSq() > 1e-10) {
-          this.rigBoneQuat(upperName, new THREE.Quaternion().setFromUnitVectors(axis, upperDirection.normalize()), 0.45);
+          this.rigBoneQuat(
+            upperName,
+            new THREE.Quaternion().setFromUnitVectors(axis, upperDirection.normalize()),
+            0.45
+          );
         }
         if (visible(wrist)) {
           const forearm = direction(pose[elbow], pose[wrist]);
           const upper = this.currentVrm.humanoid.getNormalizedBoneNode(upperName);
           if (upper && forearm.lengthSq() > 1e-10) {
             upper.updateWorldMatrix(true, false);
-            forearm.normalize().applyQuaternion(upper.getWorldQuaternion(new THREE.Quaternion()).invert());
-            this.rigBoneQuat(lowerName, new THREE.Quaternion().setFromUnitVectors(axis, forearm), 0.5);
+            forearm
+              .normalize()
+              .applyQuaternion(upper.getWorldQuaternion(new THREE.Quaternion()).invert());
+            this.rigBoneQuat(
+              lowerName,
+              new THREE.Quaternion().setFromUnitVectors(axis, forearm),
+              0.5
+            );
           }
         } else {
           this.rigBoneQuat(lowerName, new THREE.Quaternion(), 0.25);
@@ -223,27 +253,26 @@ export class VrmAvatarViewer {
         this.rigBoneQuat(lowerName, new THREE.Quaternion(), 0.25);
       }
       const hand = side === 'right' ? landmarks.leftHand : landmarks.rightHand;
-      if (hand?.length === 21) this.applyFingerArticulations(hand, side, landmarks.imageAspect ?? 1);
+      if (hand?.length === 21)
+        this.applyFingerArticulations(hand, side, landmarks.imageAspect ?? 1);
       else this.relaxFingers(side);
     }
     this.applyExpressions(landmarks.blendshapes);
-    const overrides = landmarks.vrmPoseOverride ?? {};
-    // Release corrections when a later frame no longer includes that bone.
-    for (const name of this.overrideBones ?? []) {
-      if (!(name in overrides)) this.currentVrm.humanoid.getNormalizedBoneNode(name as VRMHumanBoneName)?.quaternion.identity();
-    }
-    this.overrideBones = new Set(Object.keys(overrides));
     for (const [name, values] of Object.entries(overrides)) {
       if (values.length !== 4 || !values.every(Number.isFinite)) continue;
       const q = new THREE.Quaternion(...values);
-      if (q.lengthSq() > 1e-10) this.currentVrm.humanoid.getNormalizedBoneNode(name as VRMHumanBoneName)?.quaternion.copy(q.normalize());
+      if (q.lengthSq() > 1e-10)
+        this.currentVrm.humanoid
+          .getNormalizedBoneNode(name as VRMHumanBoneName)
+          ?.quaternion.copy(q.normalize());
     }
   }
 
   private applyExpressions(bs: Record<string, number> = {}): void {
     const manager = this.currentVrm?.expressionManager;
     if (!manager) return;
-    const value = (key: string) => Number.isFinite(bs[key]) ? THREE.MathUtils.clamp(bs[key], 0, 1) : 0;
+    const value = (key: string) =>
+      Number.isFinite(bs[key]) ? THREE.MathUtils.clamp(bs[key], 0, 1) : 0;
     manager.setValue('blinkLeft', value('eyeBlinkLeft'));
     manager.setValue('blinkRight', value('eyeBlinkRight'));
     manager.setValue('aa', Math.min(1, value('jawOpen') * 1.4));
@@ -251,21 +280,58 @@ export class VrmAvatarViewer {
   }
 
   /** Hand basis in image space -> world orientation -> orientation local to the forearm. */
-  private applyFingerArticulations(hand: LandmarkPoint[], side: 'right' | 'left', aspect = 1): void {
+  private applyFingerArticulations(
+    hand: LandmarkPoint[],
+    side: 'right' | 'left',
+    aspect = 1
+  ): void {
     if (!this.currentVrm || hand.length !== 21) return;
     const sign = side === 'right' ? 1 : -1;
-    const vector = (a: number, b: number) => new THREE.Vector3(
-      -(hand[b].x - hand[a].x) * aspect, -(hand[b].y - hand[a].y), -((hand[b].z ?? 0) - (hand[a].z ?? 0)) * aspect
-    );
+    const vector = (a: number, b: number) =>
+      new THREE.Vector3(
+        -(hand[b].x - hand[a].x) * aspect,
+        -(hand[b].y - hand[a].y),
+        -((hand[b].z ?? 0) - (hand[a].z ?? 0)) * aspect
+      );
     const heading = vector(0, 9);
     const across = vector(17, 5);
     const normal = new THREE.Vector3().crossVectors(heading, across);
-    const wrist = this.currentVrm.humanoid.getNormalizedBoneNode((side + 'Hand') as VRMHumanBoneName);
+    const wrist = this.currentVrm.humanoid.getNormalizedBoneNode(
+      (side + 'Hand') as VRMHumanBoneName
+    );
     if (wrist && heading.lengthSq() > 1e-10 && normal.lengthSq() > 1e-10) {
       const x = heading.clone().normalize().multiplyScalar(-sign);
       const z = normal.normalize().multiplyScalar(-sign);
       const y = new THREE.Vector3().crossVectors(z, x).normalize();
-      const target = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+      const target = new THREE.Quaternion().setFromRotationMatrix(
+        new THREE.Matrix4().makeBasis(x, y, z)
+      );
+      // Calibrate against this normalized rig: VRoid palms lie in XZ, not XY.
+      const middle = this.currentVrm.humanoid.getNormalizedBoneNode(
+        (side + 'MiddleProximal') as VRMHumanBoneName
+      );
+      const index = this.currentVrm.humanoid.getNormalizedBoneNode(
+        (side + 'IndexProximal') as VRMHumanBoneName
+      );
+      const little = this.currentVrm.humanoid.getNormalizedBoneNode(
+        (side + 'LittleProximal') as VRMHumanBoneName
+      );
+      if (middle && index && little) {
+        const restX = middle.position.clone().normalize().multiplyScalar(-sign);
+        const restZ = new THREE.Vector3().crossVectors(
+          middle.position,
+          index.position.clone().sub(little.position)
+        );
+        if (restX.lengthSq() > 1e-10 && restZ.lengthSq() > 1e-10) {
+          restZ.normalize().multiplyScalar(-sign);
+          const restY = new THREE.Vector3().crossVectors(restZ, restX).normalize();
+          target.multiply(
+            new THREE.Quaternion()
+              .setFromRotationMatrix(new THREE.Matrix4().makeBasis(restX, restY, restZ))
+              .invert()
+          );
+        }
+      }
       if (wrist.parent) {
         wrist.parent.updateWorldMatrix(true, false);
         target.premultiply(wrist.parent.getWorldQuaternion(new THREE.Quaternion()).invert());
@@ -273,26 +339,38 @@ export class VrmAvatarViewer {
       wrist.quaternion.slerp(target, 0.35);
     }
     const angle = (a: number, b: number, c: number) => {
-      const incoming = vector(a, b), outgoing = vector(b, c);
+      const incoming = vector(a, b),
+        outgoing = vector(b, c);
       return incoming.lengthSq() > 1e-10 && outgoing.lengthSq() > 1e-10
-        ? Math.min(1.5, incoming.angleTo(outgoing)) : 0;
+        ? Math.min(1.5, incoming.angleTo(outgoing))
+        : 0;
     };
-    for (const [finger, start] of [['Index', 5], ['Middle', 9], ['Ring', 13], ['Little', 17]] as const) {
+    for (const [finger, start] of [
+      ['Index', 5],
+      ['Middle', 9],
+      ['Ring', 13],
+      ['Little', 17],
+    ] as const) {
       for (const [joint, a, b, c] of [
         ['Proximal', 0, start, start + 1],
         ['Intermediate', start, start + 1, start + 2],
-        ['Distal', start + 1, start + 2, start + 3]
+        ['Distal', start + 1, start + 2, start + 3],
       ] as const) {
         const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, angle(a, b, c) * sign));
         this.rigBoneQuat((side + finger + joint) as VRMHumanBoneName, q, 0.4);
       }
     }
     for (const [joint, a, b, c] of [
-      ['Metacarpal', 0, 1, 2], ['Proximal', 1, 2, 3], ['Distal', 2, 3, 4]
+      ['Metacarpal', 0, 1, 2],
+      ['Proximal', 1, 2, 3],
+      ['Distal', 2, 3, 4],
     ] as const) {
       const flex = angle(a, b, c);
-      this.rigBoneQuat((side + 'Thumb' + joint) as VRMHumanBoneName,
-        new THREE.Quaternion().setFromEuler(new THREE.Euler(flex * 0.4, 0, flex * sign)), 0.4);
+      this.rigBoneQuat(
+        (side + 'Thumb' + joint) as VRMHumanBoneName,
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(flex * 0.4, 0, flex * sign)),
+        0.4
+      );
     }
   }
 
@@ -301,23 +379,44 @@ export class VrmAvatarViewer {
    */
   private relaxFingers(side: 'right' | 'left'): void {
     const ident = new THREE.Quaternion();
-    const bones = side === 'right'
-      ? [
-          VRMHumanBoneName.RightHand,
-          VRMHumanBoneName.RightThumbMetacarpal, VRMHumanBoneName.RightThumbProximal, VRMHumanBoneName.RightThumbDistal,
-          VRMHumanBoneName.RightIndexProximal, VRMHumanBoneName.RightIndexIntermediate, VRMHumanBoneName.RightIndexDistal,
-          VRMHumanBoneName.RightMiddleProximal, VRMHumanBoneName.RightMiddleIntermediate, VRMHumanBoneName.RightMiddleDistal,
-          VRMHumanBoneName.RightRingProximal, VRMHumanBoneName.RightRingIntermediate, VRMHumanBoneName.RightRingDistal,
-          VRMHumanBoneName.RightLittleProximal, VRMHumanBoneName.RightLittleIntermediate, VRMHumanBoneName.RightLittleDistal
-        ]
-      : [
-          VRMHumanBoneName.LeftHand,
-          VRMHumanBoneName.LeftThumbMetacarpal, VRMHumanBoneName.LeftThumbProximal, VRMHumanBoneName.LeftThumbDistal,
-          VRMHumanBoneName.LeftIndexProximal, VRMHumanBoneName.LeftIndexIntermediate, VRMHumanBoneName.LeftIndexDistal,
-          VRMHumanBoneName.LeftMiddleProximal, VRMHumanBoneName.LeftMiddleIntermediate, VRMHumanBoneName.LeftMiddleDistal,
-          VRMHumanBoneName.LeftRingProximal, VRMHumanBoneName.LeftRingIntermediate, VRMHumanBoneName.LeftRingDistal,
-          VRMHumanBoneName.LeftLittleProximal, VRMHumanBoneName.LeftLittleIntermediate, VRMHumanBoneName.LeftLittleDistal
-        ];
+    const bones =
+      side === 'right'
+        ? [
+            VRMHumanBoneName.RightHand,
+            VRMHumanBoneName.RightThumbMetacarpal,
+            VRMHumanBoneName.RightThumbProximal,
+            VRMHumanBoneName.RightThumbDistal,
+            VRMHumanBoneName.RightIndexProximal,
+            VRMHumanBoneName.RightIndexIntermediate,
+            VRMHumanBoneName.RightIndexDistal,
+            VRMHumanBoneName.RightMiddleProximal,
+            VRMHumanBoneName.RightMiddleIntermediate,
+            VRMHumanBoneName.RightMiddleDistal,
+            VRMHumanBoneName.RightRingProximal,
+            VRMHumanBoneName.RightRingIntermediate,
+            VRMHumanBoneName.RightRingDistal,
+            VRMHumanBoneName.RightLittleProximal,
+            VRMHumanBoneName.RightLittleIntermediate,
+            VRMHumanBoneName.RightLittleDistal,
+          ]
+        : [
+            VRMHumanBoneName.LeftHand,
+            VRMHumanBoneName.LeftThumbMetacarpal,
+            VRMHumanBoneName.LeftThumbProximal,
+            VRMHumanBoneName.LeftThumbDistal,
+            VRMHumanBoneName.LeftIndexProximal,
+            VRMHumanBoneName.LeftIndexIntermediate,
+            VRMHumanBoneName.LeftIndexDistal,
+            VRMHumanBoneName.LeftMiddleProximal,
+            VRMHumanBoneName.LeftMiddleIntermediate,
+            VRMHumanBoneName.LeftMiddleDistal,
+            VRMHumanBoneName.LeftRingProximal,
+            VRMHumanBoneName.LeftRingIntermediate,
+            VRMHumanBoneName.LeftRingDistal,
+            VRMHumanBoneName.LeftLittleProximal,
+            VRMHumanBoneName.LeftLittleIntermediate,
+            VRMHumanBoneName.LeftLittleDistal,
+          ];
 
     for (const b of bones) {
       this.rigBoneQuat(b, ident, 0.2);
@@ -327,7 +426,11 @@ export class VrmAvatarViewer {
   /**
    * Helper para rotación de hueso VRM por cuaternión con slerp.
    */
-  private rigBoneQuat(boneName: VRMHumanBoneName, targetQuat: THREE.Quaternion, lerpAmount: number = 0.35): void {
+  private rigBoneQuat(
+    boneName: VRMHumanBoneName,
+    targetQuat: THREE.Quaternion,
+    lerpAmount: number = 0.35
+  ): void {
     if (!this.currentVrm) return;
     const node = this.currentVrm.humanoid.getNormalizedBoneNode(boneName);
     if (!node) return;
@@ -340,6 +443,11 @@ export class VrmAvatarViewer {
   private applyRestingPose(elapsed: number): void {
     if (!this.currentVrm) return;
 
+    for (const name of this.overrideBones ?? [])
+      this.currentVrm.humanoid
+        .getNormalizedBoneNode(name as VRMHumanBoneName)
+        ?.quaternion.identity();
+    this.overrideBones = new Set();
     const neck = this.currentVrm.humanoid.getNormalizedBoneNode(VRMHumanBoneName.Neck);
     if (neck) {
       neck.rotation.x = Math.sin(elapsed * 0.8) * 0.02;
@@ -363,7 +471,6 @@ export class VrmAvatarViewer {
     this.applyExpressions();
   }
 
-
   public resetPose(): void {
     if (!this.currentVrm) return;
     for (const name of Object.values(VRMHumanBoneName)) {
@@ -384,7 +491,12 @@ export class VrmAvatarViewer {
   }
 
   public resize(width: number, height: number): void {
+    if (width <= 0 || height <= 0) return;
     this.camera.aspect = width / height;
+    const halfFov = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const distance = 1.08 * Math.max(0.85 / halfFov, 0.95 / (halfFov * this.camera.aspect));
+    this.camera.position.set(0, 1.15, distance);
+    this.camera.lookAt(0, 1.15, 0);
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
   }
