@@ -11,7 +11,7 @@ import {
   FilesetResolver,
   PoseLandmarker,
   HandLandmarker,
-  FaceLandmarker
+  FaceLandmarker,
 } from '@mediapipe/tasks-vision';
 import { HolisticFrameLandmarks, LandmarkPoint } from '../render/skeleton-renderer';
 
@@ -26,7 +26,7 @@ const KEY_FACE_LANDMARK_INDICES = [
   // Ojo izquierdo y derecho
   33, 133, 159, 145, 362, 263, 386, 374,
   // Nariz y barbilla
-  1, 2, 98, 327, 152
+  1, 2, 98, 327, 152,
 ];
 
 export class VisionService {
@@ -54,41 +54,41 @@ export class VisionService {
         PoseLandmarker.createFromOptions(wasmFileset, {
           baseOptions: {
             modelAssetPath: '/models/pose_landmarker.task',
-            delegate: 'GPU'
+            delegate: 'GPU',
           },
           runningMode: 'VIDEO',
           numPoses: 1,
           minPoseDetectionConfidence: 0.3,
           minPosePresenceConfidence: 0.3,
-          minTrackingConfidence: 0.3
+          minTrackingConfidence: 0.3,
         }),
 
         // 2. Detector de Manos (calibrado a 0.3 para evitar pérdida sobre ropa/pecho)
         HandLandmarker.createFromOptions(wasmFileset, {
           baseOptions: {
             modelAssetPath: '/models/hand_landmarker.task',
-            delegate: 'GPU'
+            delegate: 'GPU',
           },
           runningMode: 'VIDEO',
           numHands: 2,
           minHandDetectionConfidence: 0.3,
           minHandPresenceConfidence: 0.3,
-          minTrackingConfidence: 0.3
+          minTrackingConfidence: 0.3,
         }),
 
         // 3. Detector de Rostro con extracción de Blendshapes (prosoponema)
         FaceLandmarker.createFromOptions(wasmFileset, {
           baseOptions: {
             modelAssetPath: '/models/face_landmarker.task',
-            delegate: 'GPU'
+            delegate: 'GPU',
           },
           outputFaceBlendshapes: true,
           runningMode: 'VIDEO',
           numFaces: 1,
           minFaceDetectionConfidence: 0.4,
           minFacePresenceConfidence: 0.4,
-          minTrackingConfidence: 0.4
-        })
+          minTrackingConfidence: 0.4,
+        }),
       ]);
 
       const [rPose, rHand, rFace] = resultados;
@@ -97,21 +97,30 @@ export class VisionService {
         this.poseLandmarker = rPose.value as PoseLandmarker;
         console.log('[VisionService] ✓ PoseLandmarker listo.');
       } else {
-        console.error('[VisionService] ✗ PoseLandmarker falló:', (rPose as PromiseRejectedResult).reason);
+        console.error(
+          '[VisionService] ✗ PoseLandmarker falló:',
+          (rPose as PromiseRejectedResult).reason
+        );
       }
 
       if (rHand.status === 'fulfilled') {
         this.handLandmarker = rHand.value as HandLandmarker;
         console.log('[VisionService] ✓ HandLandmarker listo.');
       } else {
-        console.error('[VisionService] ✗ HandLandmarker falló:', (rHand as PromiseRejectedResult).reason);
+        console.error(
+          '[VisionService] ✗ HandLandmarker falló:',
+          (rHand as PromiseRejectedResult).reason
+        );
       }
 
       if (rFace.status === 'fulfilled') {
         this.faceLandmarker = rFace.value as FaceLandmarker;
         console.log('[VisionService] ✓ FaceLandmarker (Blendshapes) listo.');
       } else {
-        console.error('[VisionService] ✗ FaceLandmarker falló:', (rFace as PromiseRejectedResult).reason);
+        console.error(
+          '[VisionService] ✗ FaceLandmarker falló:',
+          (rFace as PromiseRejectedResult).reason
+        );
       }
 
       if (this.poseLandmarker && this.handLandmarker) {
@@ -133,7 +142,10 @@ export class VisionService {
     }
   }
 
-  public detect(video: HTMLVideoElement, timestamp: number): {
+  public detect(
+    video: HTMLVideoElement,
+    timestamp: number
+  ): {
     landmarks: HolisticFrameLandmarks;
     encuadreValido: boolean;
   } {
@@ -141,7 +153,9 @@ export class VisionService {
       return { landmarks: {}, encuadreValido: false };
     }
 
-    const result: HolisticFrameLandmarks = { imageAspect: video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : 1 };
+    const result: HolisticFrameLandmarks = {
+      imageAspect: video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : 1,
+    };
     let encuadreValido = false;
 
     // 1. Inferencia de Pose
@@ -153,7 +167,7 @@ export class VisionService {
           x: lm.x,
           y: lm.y,
           z: lm.z,
-          visibility: lm.visibility ?? 1.0
+          visibility: lm.visibility ?? 1.0,
         }));
 
         if (poseResult.worldLandmarks && poseResult.worldLandmarks.length > 0) {
@@ -161,7 +175,7 @@ export class VisionService {
             x: wlm.x,
             y: wlm.y,
             z: wlm.z,
-            visibility: wlm.visibility ?? 1.0
+            visibility: wlm.visibility ?? 1.0,
           }));
         }
 
@@ -170,10 +184,15 @@ export class VisionService {
         const rightShoulder = result.pose[12];
 
         if (
-          nose && leftShoulder && rightShoulder &&
-          nose.x > 0.15 && nose.x < 0.85 &&
-          nose.y > 0.10 && nose.y < 0.85 &&
-          leftShoulder.x > 0.10 && rightShoulder.x < 0.90
+          nose &&
+          leftShoulder &&
+          rightShoulder &&
+          nose.x > 0.15 &&
+          nose.x < 0.85 &&
+          nose.y > 0.1 &&
+          nose.y < 0.85 &&
+          leftShoulder.x > 0.1 &&
+          rightShoulder.x < 0.9
         ) {
           encuadreValido = true;
         }
@@ -185,16 +204,18 @@ export class VisionService {
       const handResult = this.handLandmarker.detectForVideo(video, timestamp);
       if (handResult.landmarks && handResult.landmarks.length > 0) {
         const hands = handResult.landmarks.map((points, index) => ({
-          points: points.map(p => ({ x: p.x, y: p.y, z: p.z, visibility: 1 })),
+          points: points.map((p) => ({ x: p.x, y: p.y, z: p.z, visibility: 1 })),
           category: handResult.handedness[index]?.[0]?.categoryName,
-          score: handResult.handedness[index]?.[0]?.score ?? 0
+          score: handResult.handedness[index]?.[0]?.score ?? 0,
         }));
         const aspect = result.imageAspect ?? 1;
-        const cost = (hand: typeof hands[number], side: 'left' | 'right') => {
+        const cost = (hand: (typeof hands)[number], side: 'left' | 'right') => {
           const index = side === 'left' ? 15 : 16;
           const poseWrist = result.pose?.[index];
-          const anchor = poseWrist && (poseWrist.visibility ?? 1) > 0.25 ? poseWrist : this.previousHands[side];
-          if (anchor) return Math.hypot((hand.points[0].x - anchor.x) * aspect, hand.points[0].y - anchor.y);
+          const anchor =
+            poseWrist && (poseWrist.visibility ?? 1) > 0.25 ? poseWrist : this.previousHands[side];
+          if (anchor)
+            return Math.hypot((hand.points[0].x - anchor.x) * aspect, hand.points[0].y - anchor.y);
           // Labels only break ties when body and temporal anchors are unavailable.
           const expected = side === 'left' ? 'Right' : 'Left';
           return hand.category === expected ? 1 - hand.score : 1 + hand.score;
@@ -221,7 +242,9 @@ export class VisionService {
         // Mapear solo puntos clave de contorno facial para el canvas
         result.face = KEY_FACE_LANDMARK_INDICES.map((idx) => {
           const pt = allFacePoints[idx];
-          return pt ? { x: pt.x, y: pt.y, z: pt.z, visibility: 1.0 } : { x: 0, y: 0, z: 0, visibility: 0 };
+          return pt
+            ? { x: pt.x, y: pt.y, z: pt.z, visibility: 1.0 }
+            : { x: 0, y: 0, z: 0, visibility: 0 };
         });
 
         // Extraer coeficientes de Blendshapes (ARKit / VRoid / Blender)
@@ -235,12 +258,22 @@ export class VisionService {
       }
     }
 
-    const inside = (p: LandmarkPoint | undefined) => p && (p.visibility ?? 1) > 0.5 && p.x > 0.05 && p.x < 0.95 && p.y > 0.05 && p.y < 0.95;
-    encuadreValido = encuadreValido && !!result.face?.length && !!inside(result.leftHand?.[0]) && !!inside(result.rightHand?.[0]) && !!inside(result.pose?.[11]) && !!inside(result.pose?.[12]);
+    const inside = (p: LandmarkPoint | undefined) =>
+      p && (p.visibility ?? 1) > 0.5 && p.x > 0.05 && p.x < 0.95 && p.y > 0.05 && p.y < 0.95;
+    encuadreValido =
+      encuadreValido &&
+      !!result.face?.length &&
+      !!inside(result.leftHand?.[0]) &&
+      !!inside(result.rightHand?.[0]) &&
+      !!inside(result.pose?.[11]) &&
+      !!inside(result.pose?.[12]);
     if (!encuadreValido) this.framingSince = null;
     else this.framingSince ??= timestamp;
     if (!result.leftHand && !result.rightHand) this.previousHands = {};
-    return { landmarks: result, encuadreValido: encuadreValido && timestamp - (this.framingSince ?? timestamp) >= 1000 };
+    return {
+      landmarks: result,
+      encuadreValido: encuadreValido && timestamp - (this.framingSince ?? timestamp) >= 1000,
+    };
   }
 
   public getReadyStatus(): boolean {

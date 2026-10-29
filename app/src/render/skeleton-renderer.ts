@@ -15,6 +15,7 @@ export interface LandmarkPoint {
 
 export interface HolisticFrameLandmarks {
   imageAspect?: number;
+  isDemo?: boolean;
   pose?: LandmarkPoint[];
   poseWorld?: LandmarkPoint[];
   leftHand?: LandmarkPoint[];
@@ -27,15 +28,31 @@ export interface HolisticFrameLandmarks {
 // Conexiones de mano estándar de MediaPipe (21 puntos)
 export const HAND_CONNECTIONS: [number, number][] = [
   // Pulgar
-  [0, 1], [1, 2], [2, 3], [3, 4],
+  [0, 1],
+  [1, 2],
+  [2, 3],
+  [3, 4],
   // Índice
-  [0, 5], [5, 6], [6, 7], [7, 8],
+  [0, 5],
+  [5, 6],
+  [6, 7],
+  [7, 8],
   // Medio
-  [5, 9], [9, 10], [10, 11], [11, 12],
+  [5, 9],
+  [9, 10],
+  [10, 11],
+  [11, 12],
   // Anular
-  [9, 13], [13, 14], [14, 15], [15, 16],
+  [9, 13],
+  [13, 14],
+  [14, 15],
+  [15, 16],
   // Meñique
-  [13, 17], [0, 17], [17, 18], [18, 19], [19, 20]
+  [13, 17],
+  [0, 17],
+  [17, 18],
+  [18, 19],
+  [19, 20],
 ];
 
 // Conexiones de torso / pose clave para lengua de señas
@@ -43,11 +60,14 @@ export const POSE_UPPER_CONNECTIONS: [number, number][] = [
   // Hombros y pecho
   [11, 12],
   // Brazo izquierdo: Hombro -> Codo -> Muñeca
-  [11, 13], [13, 15],
+  [11, 13],
+  [13, 15],
   // Brazo derecho: Hombro -> Codo -> Muñeca
-  [12, 14], [14, 16],
+  [12, 14],
+  [14, 16],
   // Cuello / Cabeza a hombros
-  [0, 11], [0, 12]
+  [0, 11],
+  [0, 12],
 ];
 
 export class SkeletonRenderer {
@@ -91,7 +111,7 @@ export class SkeletonRenderer {
         [0, 11],
         [0, 12],
         [11, 13], // Hombro izq -> Codo izq
-        [12, 14]  // Hombro der -> Codo der
+        [12, 14], // Hombro der -> Codo der
       ];
 
       const hasRightHand = !!(landmarks.rightHand && landmarks.rightHand.length === 21);
@@ -140,8 +160,10 @@ export class SkeletonRenderer {
     w: number,
     h: number
   ): void {
-    if ((p1.visibility !== undefined && p1.visibility < 0.25) ||
-        (p2.visibility !== undefined && p2.visibility < 0.25)) {
+    if (
+      (p1.visibility !== undefined && p1.visibility < 0.25) ||
+      (p2.visibility !== undefined && p2.visibility < 0.25)
+    ) {
       return;
     }
     this.ctx.save();
@@ -171,7 +193,12 @@ export class SkeletonRenderer {
     for (const [i, j] of connections) {
       const p1 = points[i];
       const p2 = points[j];
-      if (p1 && p2 && (p1.visibility === undefined || p1.visibility > 0.4) && (p2.visibility === undefined || p2.visibility > 0.4)) {
+      if (
+        p1 &&
+        p2 &&
+        (p1.visibility === undefined || p1.visibility > 0.4) &&
+        (p2.visibility === undefined || p2.visibility > 0.4)
+      ) {
         this.ctx.beginPath();
         this.ctx.moveTo(p1.x * w, p1.y * h);
         this.ctx.lineTo(p2.x * w, p2.y * h);
@@ -192,7 +219,9 @@ export class SkeletonRenderer {
     this.ctx.save();
     this.ctx.fillStyle = color;
 
-    const toDraw = indices ? indices.map((i) => ({ pt: points[i], idx: i })) : points.map((pt, idx) => ({ pt, idx }));
+    const toDraw = indices
+      ? indices.map((i) => ({ pt: points[i], idx: i }))
+      : points.map((pt, idx) => ({ pt, idx }));
 
     for (const item of toDraw) {
       const p = item.pt;
@@ -214,17 +243,17 @@ export class SkeletonRenderer {
       ...Array(10).fill({ x: 0.5, y: 0.25, visibility: 0.1 }),
       { x: 0.38, y: 0.42, visibility: 0.95 }, // 11: hombro izq
       { x: 0.62, y: 0.42, visibility: 0.95 }, // 12: hombro der
-      { x: 0.32, y: 0.60, visibility: 0.95 }, // 13: codo izq
+      { x: 0.32, y: 0.6, visibility: 0.95 }, // 13: codo izq
       { x: 0.68 + wave * 0.5, y: 0.55 - wave, visibility: 0.95 }, // 14: codo der
-      { x: 0.30, y: 0.78, visibility: 0.95 }, // 15: muñeca izq
-      { x: 0.65 + wave, y: 0.35 + wave, visibility: 0.95 }  // 16: muñeca der
+      { x: 0.3, y: 0.78, visibility: 0.95 }, // 15: muñeca izq
+      { x: 0.65 + wave, y: 0.35 + wave, visibility: 0.95 }, // 16: muñeca der
     ];
 
     const poseWorld: LandmarkPoint[] = pose.map((pt) => ({
       x: (pt.x - 0.5) * 1.5,
       y: (0.5 - pt.y) * 1.5,
       z: 0.0,
-      visibility: pt.visibility
+      visibility: pt.visibility,
     }));
 
     const rightHand: LandmarkPoint[] = Array.from({ length: 21 }, (_, idx) => {
@@ -234,10 +263,13 @@ export class SkeletonRenderer {
     });
 
     const face: LandmarkPoint[] = [
-      { x: 0.45, y: 0.20 }, { x: 0.55, y: 0.20 }, // cejas
-      { x: 0.46, y: 0.24 }, { x: 0.54, y: 0.24 }, // ojos
-      { x: 0.50, y: 0.28 }, // nariz
-      { x: 0.47, y: 0.32 }, { x: 0.53, y: 0.32 }  // boca
+      { x: 0.45, y: 0.2 },
+      { x: 0.55, y: 0.2 }, // cejas
+      { x: 0.46, y: 0.24 },
+      { x: 0.54, y: 0.24 }, // ojos
+      { x: 0.5, y: 0.28 }, // nariz
+      { x: 0.47, y: 0.32 },
+      { x: 0.53, y: 0.32 }, // boca
     ];
 
     return { pose, poseWorld, rightHand, face };

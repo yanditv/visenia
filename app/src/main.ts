@@ -68,6 +68,11 @@ const exportMsg = document.getElementById('export-msg') as HTMLSpanElement;
 const cameraService = new CameraService(video);
 const renderer = new SkeletonRenderer(canvas);
 const visionService = new VisionService();
+const referenceRenderer = new SkeletonRenderer(
+  document.getElementById('reference-skeleton-canvas') as HTMLCanvasElement
+);
+referenceRenderer.resize(640, 480);
+const referenceStatus = document.getElementById('reference-status') as HTMLSpanElement;
 const annotationService = new AnnotationService();
 const catalogoService = new CatalogoPlayerService();
 
@@ -113,15 +118,17 @@ function updateFonologiaDisplay(): void {
     const params = sena.parametros_fonologicos;
     const toponema = params.toponema_ubicacion.zona_corporal.replace('_', ' ');
     const kinesema = params.kinesema_movimiento.tipo_movimiento;
-    const queirema = params.queirema_configuracion.codigo_forma.replace('_', ' ');
-    fonologiaInfo.textContent = `Toponema: ${toponema} • Mov: ${kinesema} • Forma: ${queirema}`;
-    sliderPlayerProgress.max = (sena.frames.length - 1).toString();
-    sliderPlayerProgress.value = '0';
-    playerTimeDisplay.textContent = `0/${sena.frames.length}`;
+    const queirema = params.queirema_configuracion.codigo_forma.replaceAll('_', ' ');
+    fonologiaInfo.textContent = `Ubicación: ${toponema} • Movimiento: ${kinesema} • Forma: ${queirema} • Palma: ${params.kinema_orientacion.vector_palma.join(', ')} • Expresión: ${params.prosoponema_no_manual.requerido ? 'requerida' : 'neutra'}`;
+    sliderPlayerProgress.min = sena.segmentacion.frame_inicio_sena.toString();
+    sliderPlayerProgress.max = sena.segmentacion.frame_fin_sena.toString();
+    sliderPlayerProgress.value = catalogoService.getCurrentFrameIndex().toString();
+    playerTimeDisplay.textContent = `${catalogoService.getCurrentFrameIndex()}/${sena.frames.length}`;
   }
 }
 
 selectCatalogoSena.addEventListener('change', () => {
+  avatarViewer.resetPose();
   catalogoService.selectSena(selectCatalogoSena.value);
   updateFonologiaDisplay();
   if (catalogoService.getIsPlaying()) {
@@ -150,6 +157,7 @@ btnPlayerSpeed.addEventListener('click', () => {
 });
 
 sliderPlayerProgress.addEventListener('input', () => {
+  if (avatarDisplayMode !== 'guia') return;
   const targetFrame = parseInt(sliderPlayerProgress.value);
   catalogoService.seekFrame(targetFrame);
   const sena = catalogoService.getSelectedSena();
@@ -157,12 +165,14 @@ sliderPlayerProgress.addEventListener('input', () => {
     const update = catalogoService.update(performance.now());
     if (update.landmarks) {
       avatarViewer.updatePose(update.landmarks);
+      referenceRenderer.render(update.landmarks);
     }
     playerTimeDisplay.textContent = `${targetFrame}/${sena.frames.length}`;
   }
 });
 
 btnPlayerRestart.addEventListener('click', () => {
+  avatarViewer.resetPose();
   catalogoService.seekFrame(0);
   catalogoService.play();
   btnPlayerPlay.textContent = '⏸ Pausar';
@@ -170,27 +180,31 @@ btnPlayerRestart.addEventListener('click', () => {
 });
 
 // ─── Selector de Modo de Avatar (Guía vs Reflejo en Vivo) ───────────────────
-btnModeGuia?.addEventListener('click', () => {
-  avatarDisplayMode = 'guia';
-  btnModeGuia.classList.add('active');
-  btnModeEspejo.classList.remove('active');
-  const update = catalogoService.update(performance.now());
-  if (update.landmarks) {
-    avatarViewer.updatePose(update.landmarks);
+function setAvatarDisplayMode(mode: 'guia' | 'espejo'): void {
+  avatarDisplayMode = mode;
+  avatarViewer.resetPose();
+  btnModeGuia.classList[mode === 'guia' ? 'add' : 'remove']('active');
+  btnModeEspejo.classList[mode === 'espejo' ? 'add' : 'remove']('active');
+  btnModeGuia.setAttribute('aria-pressed', String(mode === 'guia'));
+  btnModeEspejo.setAttribute('aria-pressed', String(mode === 'espejo'));
+  for (const control of [btnPlayerPlay, btnPlayerSpeed, btnPlayerRestart, sliderPlayerProgress])
+    control.disabled = mode !== 'guia';
+  if (mode === 'espejo') {
+    catalogoService.pause();
+    btnPlayerPlay.textContent = '▶ Reproducir';
+    btnPlayerPlay.classList.remove('playing');
   }
-});
-
-btnModeEspejo?.addEventListener('click', () => {
-  avatarDisplayMode = 'espejo';
-  btnModeEspejo.classList.add('active');
-  btnModeGuia.classList.remove('active');
-});
+}
+btnModeGuia.addEventListener('click', () => setAvatarDisplayMode('guia'));
+btnModeEspejo.addEventListener('click', () => setAvatarDisplayMode('espejo'));
 
 // ─── Estado de la app ────────────────────────────────────────────────────────
 let isSimulating = false;
 let lastTimestamp = performance.now();
 let frameCount = 0;
 let currentFps = 0;
+let lastVideoTime = -1;
+let lastDetection: ReturnType<VisionService['detect']> = { landmarks: {}, encuadreValido: false };
 
 // ─── Ajuste dinámico del canvas del espejo ───────────────────────────────────
 function syncCanvasSize() {
@@ -206,7 +220,6 @@ window.addEventListener('resize', syncCanvasSize);
 
 // ─── Bucle de renderizado principal (RAF) ────────────────────────────────────
 function animationLoop(timestamp: number) {
-  frameCount++;
   if (timestamp - lastTimestamp >= 1000) {
     currentFps = Math.round((frameCount * 1000) / (timestamp - lastTimestamp));
     fpsDisplay.textContent = `FPS: ${currentFps}`;
@@ -217,6 +230,7 @@ function animationLoop(timestamp: number) {
   syncCanvasSize();
 
   let userLandmarks: HolisticFrameLandmarks = {};
+  let freshFrame = isSimulating;
 
   // 1. Obtención de landmarks del usuario (cámara o simulación)
   if (isSimulating) {
@@ -224,7 +238,12 @@ function animationLoop(timestamp: number) {
     encuadreBox?.classList.add('valido');
   } else if (cameraService.isRunning()) {
     if (visionService.getReadyStatus()) {
-      const detection = visionService.detect(video, timestamp);
+      if (video.currentTime !== lastVideoTime) {
+        freshFrame = true;
+        lastDetection = visionService.detect(video, timestamp);
+        lastVideoTime = video.currentTime;
+      }
+      const detection = lastDetection;
       userLandmarks = detection.landmarks;
 
       if (detection.encuadreValido) {
@@ -240,12 +259,14 @@ function animationLoop(timestamp: number) {
     encuadreBox?.classList.remove('valido');
   }
 
+  if (freshFrame) frameCount++;
+
   // 2. Renderizado del espejo del usuario
   if (userLandmarks.pose || userLandmarks.rightHand || userLandmarks.leftHand) {
     renderer.render(userLandmarks);
 
     // Registro continuo si la grabación del anotador está activa
-    if (annotationService.getIsRecording()) {
+    if (annotationService.getIsRecording() && freshFrame) {
       annotationService.recordFrame(userLandmarks);
       const frames = annotationService.getRecordedFrames();
       const lastFrame = frames[frames.length - 1];
@@ -263,6 +284,10 @@ function animationLoop(timestamp: number) {
     const guideUpdate = catalogoService.update(timestamp);
     if (guideUpdate.landmarks) {
       avatarViewer.updatePose(guideUpdate.landmarks);
+      referenceRenderer.render(guideUpdate.landmarks);
+      referenceStatus.textContent = guideUpdate.landmarks.isDemo
+        ? 'Demostración: mano abierta de respaldo'
+        : 'Esqueleto de referencia';
       sliderPlayerProgress.value = guideUpdate.frameIndex.toString();
       playerTimeDisplay.textContent = `${guideUpdate.frameIndex}/${guideUpdate.totalFrames}`;
     }
@@ -286,6 +311,8 @@ btnToggleCamera.addEventListener('click', async () => {
   try {
     if (cameraService.isRunning()) {
       cameraService.stop();
+      lastVideoTime = -1;
+      lastDetection = { landmarks: {}, encuadreValido: false };
       btnToggleCamera.textContent = 'Encender Cámara';
       btnToggleCamera.classList.remove('btn-secondary');
       btnToggleCamera.classList.add('btn-primary');
@@ -441,7 +468,7 @@ btnExportJson.addEventListener('click', () => {
       toponemaZona: selectToponema.value as any,
       kinesemaTipo: selectKinesema.value as any,
       kinesemaRepeticiones: 1,
-      prosoponemaRequerido: checkProsoponema.checked
+      prosoponemaRequerido: checkProsoponema.checked,
     });
 
     annotationService.downloadJson(doc);

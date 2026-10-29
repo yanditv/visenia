@@ -12,6 +12,7 @@ import { HolisticFrameLandmarks } from '../render/skeleton-renderer';
 export interface FrameCapturaSchema {
   frame_idx: number;
   timestamp_ms: number;
+  image_aspect?: number;
   pose?: Array<{ x: number; y: number; z: number; visibility?: number }>;
   pose_world?: Array<{ x: number; y: number; z: number; visibility?: number }>;
   mano_derecha?: Array<{ x: number; y: number; z: number }>;
@@ -51,7 +52,8 @@ export interface ReferenciaSenaData {
       tolerancia_grados: number;
     };
     toponema_ubicacion: {
-      zona_corporal: 'neutro_espacio' | 'cabeza' | 'frente' | 'pecho' | 'barbilla' | 'hombro' | 'mano_base';
+      zona_corporal:
+        'neutro_espacio' | 'cabeza' | 'frente' | 'pecho' | 'barbilla' | 'hombro' | 'mano_base';
       tolerancia_radio: number;
     };
     kinesema_movimiento: {
@@ -85,7 +87,8 @@ export class AnnotationService {
     const timestamp_ms = Math.round(performance.now() - this.startTime);
     const frame: FrameCapturaSchema = {
       frame_idx: this.frameCount++,
-      timestamp_ms
+      timestamp_ms,
+      image_aspect: landmarks.imageAspect,
     };
 
     if (landmarks.pose && landmarks.pose.length > 0) {
@@ -93,7 +96,7 @@ export class AnnotationService {
         x: Math.round(pt.x * 1000) / 1000,
         y: Math.round(pt.y * 1000) / 1000,
         z: Math.round((pt.z ?? 0) * 1000) / 1000,
-        visibility: Math.round((pt.visibility ?? 1.0) * 100) / 100
+        visibility: Math.round((pt.visibility ?? 1.0) * 100) / 100,
       }));
     }
 
@@ -102,7 +105,7 @@ export class AnnotationService {
         x: Math.round(pt.x * 1000) / 1000,
         y: Math.round(pt.y * 1000) / 1000,
         z: Math.round((pt.z ?? 0) * 1000) / 1000,
-        visibility: Math.round((pt.visibility ?? 1.0) * 100) / 100
+        visibility: Math.round((pt.visibility ?? 1.0) * 100) / 100,
       }));
     }
 
@@ -110,7 +113,7 @@ export class AnnotationService {
       frame.mano_derecha = landmarks.rightHand.map((pt) => ({
         x: Math.round(pt.x * 1000) / 1000,
         y: Math.round(pt.y * 1000) / 1000,
-        z: Math.round((pt.z ?? 0) * 1000) / 1000
+        z: Math.round((pt.z ?? 0) * 1000) / 1000,
       }));
     }
 
@@ -118,7 +121,7 @@ export class AnnotationService {
       frame.mano_izquierda = landmarks.leftHand.map((pt) => ({
         x: Math.round(pt.x * 1000) / 1000,
         y: Math.round(pt.y * 1000) / 1000,
-        z: Math.round((pt.z ?? 0) * 1000) / 1000
+        z: Math.round((pt.z ?? 0) * 1000) / 1000,
       }));
     }
 
@@ -138,7 +141,7 @@ export class AnnotationService {
     const durationMs = Math.round(performance.now() - this.startTime);
     return {
       totalFrames: this.frames.length,
-      durationMs
+      durationMs,
     };
   }
 
@@ -164,7 +167,8 @@ export class AnnotationService {
     queiremaForma: string;
     queiremaDesc: string;
     kinemaPalma: [number, number, number];
-    toponemaZona: 'neutro_espacio' | 'cabeza' | 'frente' | 'pecho' | 'barbilla' | 'hombro' | 'mano_base';
+    toponemaZona:
+      'neutro_espacio' | 'cabeza' | 'frente' | 'pecho' | 'barbilla' | 'hombro' | 'mano_base';
     kinesemaTipo: 'rectilineo' | 'curvo' | 'circular' | 'ondulatorio' | 'estatico';
     kinesemaRepeticiones: number;
     prosoponemaRequerido: boolean;
@@ -176,14 +180,32 @@ export class AnnotationService {
     const segment = source.slice(start, end + 1);
     if (segment.length < 2) throw new Error('Selecciona al menos dos cuadros de la seña.');
     const origin = segment[0].timestamp_ms;
-    const framesToUse = segment.map((frame, index) => ({ ...frame, frame_idx: index, timestamp_ms: frame.timestamp_ms - origin }));
+    const framesToUse = segment.map((frame, index) => ({
+      ...frame,
+      frame_idx: index,
+      timestamp_ms: frame.timestamp_ms - origin,
+    }));
     const totalFrames = framesToUse.length;
     const duracionMs = framesToUse[totalFrames - 1].timestamp_ms;
-    if (duracionMs <= 0 || framesToUse.some((f, i) => !Number.isFinite(f.timestamp_ms) || (i > 0 && f.timestamp_ms <= framesToUse[i - 1].timestamp_ms))) throw new Error('La captura contiene tiempos inválidos.');
-    const fps = (totalFrames - 1) * 1000 / duracionMs;
-    if (fps < 15) throw new Error('La captura no alcanza 15 fps. Repite la toma para conservar su velocidad real.');
+    if (
+      duracionMs <= 0 ||
+      framesToUse.some(
+        (f, i) =>
+          !Number.isFinite(f.timestamp_ms) ||
+          (i > 0 && f.timestamp_ms <= framesToUse[i - 1].timestamp_ms)
+      )
+    )
+      throw new Error('La captura contiene tiempos inválidos.');
+    const fps = ((totalFrames - 1) * 1000) / duracionMs;
+    if (fps < 15)
+      throw new Error(
+        'La captura no alcanza 15 fps. Repite la toma para conservar su velocidad real.'
+      );
 
-    const cleanGlosa = config.glosa.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const cleanGlosa = config.glosa
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-');
     const id = `ref-${cleanGlosa || 'sena'}-${Date.now().toString().slice(-6)}`;
 
     return {
@@ -198,38 +220,38 @@ export class AnnotationService {
         total_frames: totalFrames,
         duracion_ms: Math.max(100, duracionMs),
         anotador: config.anotador.trim() || 'Especialista LSE',
-        fecha_anotacion: new Date().toISOString()
+        fecha_anotacion: new Date().toISOString(),
       },
       segmentacion: {
         frame_inicio_preparacion: 0,
         frame_inicio_sena: 0,
         frame_fin_sena: totalFrames - 1,
-        frame_retorno: totalFrames - 1
+        frame_retorno: totalFrames - 1,
       },
       parametros_fonologicos: {
         queirema_configuracion: {
           codigo_forma: config.queiremaForma.trim() || 'mano_plana',
           descripcion: config.queiremaDesc.trim() || 'Palma extendida con dedos unidos',
-          tolerancia_grados: 20
+          tolerancia_grados: 20,
         },
         kinema_orientacion: {
           vector_palma: config.kinemaPalma,
-          tolerancia_grados: 25
+          tolerancia_grados: 25,
         },
         toponema_ubicacion: {
           zona_corporal: config.toponemaZona,
-          tolerancia_radio: 0.15
+          tolerancia_radio: 0.15,
         },
         kinesema_movimiento: {
           tipo_movimiento: config.kinesemaTipo,
-          repeticiones: config.kinesemaRepeticiones
+          repeticiones: config.kinesemaRepeticiones,
         },
         prosoponema_no_manual: {
           requerido: config.prosoponemaRequerido,
-          blendshapes_clave: config.prosoponemaRequerido ? { jawOpen: 0.3 } : {}
-        }
+          blendshapes_clave: config.prosoponemaRequerido ? { jawOpen: 0.3 } : {},
+        },
       },
-      frames: framesToUse
+      frames: framesToUse,
     };
   }
 
