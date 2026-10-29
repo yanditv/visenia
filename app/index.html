@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0f172a" />
-  <meta name="description" content="Espejo de Práctica de Lengua de Señas - Viseña (Sprint 1 / RF-01, RF-02, RF-36, RF-42)" />
+  <meta name="description" content="Espejo y Catálogo de Práctica de Lengua de Señas - Viseña (Sprint 1 / RF-01, RF-02, RF-07, RF-08, RF-36, RF-42)" />
   <link rel="manifest" href="/manifest.json" />
-  <title>Viseña - Espejo y Anotador de Señas (PWA)</title>
+  <title>Viseña - Espejo, Catálogo y Avatar 3D (PWA)</title>
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
@@ -14,11 +14,11 @@
     <header class="app-header">
       <div class="logo-area">
         <h1>Viseña</h1>
-        <span class="badge">Sprint 1 • RF-36 / RF-42</span>
+        <span class="badge">Sprint 1 • RF-07 / RF-08 / RF-36 / RF-42</span>
       </div>
 
       <nav class="nav-tabs" aria-label="Modos de la aplicación">
-        <button id="tab-practica" class="tab-btn active">🎯 Práctica & Espejo</button>
+        <button id="tab-practica" class="tab-btn active">🎯 Práctica & Catálogo</button>
         <button id="tab-anotador" class="tab-btn">📝 Anotador de Señas (RF-36)</button>
       </nav>
 
@@ -28,12 +28,12 @@
       </div>
     </header>
 
-    <!-- Layout dividido: Espejo usuario (izq) | Avatar guía (der) -->
+    <!-- Layout dividido: Espejo usuario (izq) | Avatar guía y catálogo (der) -->
     <main class="split-container">
 
       <!-- Panel izquierdo: espejo del usuario -->
       <section class="panel panel-usuario" aria-label="Espejo del usuario">
-        <div class="panel-label">Tú</div>
+        <div class="panel-label">Tú (Espejo de Práctica)</div>
         <div class="viewport-wrapper">
           <video id="webcam-video" autoplay playsinline muted></video>
           <canvas id="skeleton-canvas"></canvas>
@@ -46,13 +46,33 @@
         </div>
       </section>
 
-      <!-- Panel derecho: avatar guía VRM -->
-      <section class="panel panel-avatar" aria-label="Avatar guía">
-        <div class="panel-label">Avatar Guía (visenia.vrm)</div>
+      <!-- Panel derecho: avatar guía VRM y reproductor de catálogo (RF-07, RF-08) -->
+      <section class="panel panel-avatar" aria-label="Avatar guía y reproductor">
+        <div class="avatar-header-bar">
+          <div class="sena-selector-group">
+            <label for="select-catalogo-sena">Seña Guía (RF-07):</label>
+            <select id="select-catalogo-sena" class="select-sena">
+              <option value="">Cargando catálogo...</option>
+            </select>
+          </div>
+          <div id="fonologia-badge" class="fonologia-badge">
+            <span id="fonologia-info">Toponema: -- • Mov: --</span>
+          </div>
+        </div>
+
         <div id="avatar-container" class="avatar-wrapper">
           <div id="avatar-loading" class="avatar-loading">
             <span class="avatar-loading-text">Cargando avatar…</span>
           </div>
+        </div>
+
+        <!-- Barra de reproducción interactiva (RF-08) -->
+        <div class="avatar-player-bar">
+          <button id="btn-player-play" class="btn btn-player-play">▶ Reproducir</button>
+          <button id="btn-player-speed" class="btn btn-player-speed" title="Alternar velocidad normal y lenta (1x / 0.5x)">1.0×</button>
+          <input type="range" id="slider-player-progress" class="player-progress" min="0" max="100" value="0" />
+          <span id="player-time-display" class="player-time">0/0</span>
+          <button id="btn-player-restart" class="btn btn-player-icon" title="Reiniciar seña">↺</button>
         </div>
       </section>
 
@@ -168,7 +188,7 @@
       </div>
     </section>
 
-    <!-- Controles y leyenda -->
+    <!-- Controles globales de cámara y leyenda -->
     <div class="controls-panel">
       <button id="btn-toggle-camera" class="btn btn-primary">Encender Cámara</button>
       <button id="btn-toggle-synthetic" class="btn btn-secondary">Modo Simulación (Spike)</button>
@@ -180,7 +200,7 @@
     </div>
 
     <footer class="app-footer">
-      <small>Proyecto Viseña — Fondo INVENTA • Desarrollador B (Lucas) • PWA Espejo Digital & Anotador</small>
+      <small>Proyecto Viseña — Fondo INVENTA • Desarrollador B (Lucas) • PWA Espejo Digital, Catálogo & Avatar VRM</small>
     </footer>
   </div>
 

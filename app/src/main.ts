@@ -1,17 +1,19 @@
 /**
- * Punto de entrada principal de la PWA Viseña — Espejo Digital + Avatar Guía + Anotador
- * Sprint 1 (RF-01, RF-02, RF-36, RF-42, ADR-002)
+ * Punto de entrada principal de la PWA Viseña — Espejo Digital + Avatar Guía + Catálogo + Anotador
+ * Sprint 1 (RF-01, RF-02, RF-07, RF-08, RF-36, RF-42, ADR-002)
  *
- * Layout dividido:
- *  - Panel izquierdo: espejo del usuario con inferencia MediaPipe (Pose + Manos + Rostro)
- *  - Panel derecho: avatar VRM guía (visenia.vrm) con cinemática en tiempo real vía Kalidokit
- *  - Anotador RF-36: captura, segmentación y exportación de referencias JSON fonológicas
+ * Características:
+ *  - Panel izquierdo: espejo de práctica con inferencia MediaPipe GPU (Pose + Manos + Rostro)
+ *  - Panel derecho: avatar VRM (visenia.vrm) con cinemática Three.js + Kalidokit
+ *  - Catálogo y reproductor (RF-07, RF-08): reproduce señas de referencia a 1x y 0.5x
+ *  - Anotador fonológico (RF-36): captura, segmentación y exportación de referencias JSON schema v1.1.0
  */
 import { CameraService } from './camera/camera-service';
 import { SkeletonRenderer, HolisticFrameLandmarks } from './render/skeleton-renderer';
 import { VisionService } from './vision/vision-service';
 import { VrmAvatarViewer, VRM_MODEL_URL } from './avatar/vrm-loader-spike';
 import { AnnotationService } from './anotador/annotation-service';
+import { CatalogoPlayerService } from './catalogo/catalogo-service';
 
 // ─── Referencias del DOM: Espejo y HUD ──────────────────────────────────────
 const video = document.getElementById('webcam-video') as HTMLVideoElement;
@@ -24,7 +26,16 @@ const btnToggleSynthetic = document.getElementById('btn-toggle-synthetic') as HT
 const avatarContainer = document.getElementById('avatar-container') as HTMLDivElement;
 const avatarLoading = document.getElementById('avatar-loading') as HTMLDivElement;
 
-// ─── Referencias del DOM: Tabs y Drawer Anotador RF-36 ───────────────────────
+// ─── Referencias del DOM: Catálogo y Reproductor (RF-07, RF-08) ─────────────
+const selectCatalogoSena = document.getElementById('select-catalogo-sena') as HTMLSelectElement;
+const fonologiaInfo = document.getElementById('fonologia-info') as HTMLSpanElement;
+const btnPlayerPlay = document.getElementById('btn-player-play') as HTMLButtonElement;
+const btnPlayerSpeed = document.getElementById('btn-player-speed') as HTMLButtonElement;
+const sliderPlayerProgress = document.getElementById('slider-player-progress') as HTMLInputElement;
+const playerTimeDisplay = document.getElementById('player-time-display') as HTMLSpanElement;
+const btnPlayerRestart = document.getElementById('btn-player-restart') as HTMLButtonElement;
+
+// ─── Referencias del DOM: Tabs y Drawer Anotador (RF-36) ─────────────────────
 const tabPractica = document.getElementById('tab-practica') as HTMLButtonElement;
 const tabAnotador = document.getElementById('tab-anotador') as HTMLButtonElement;
 const anotadorDrawer = document.getElementById('anotador-drawer') as HTMLElement;
@@ -53,6 +64,7 @@ const cameraService = new CameraService(video);
 const renderer = new SkeletonRenderer(canvas);
 const visionService = new VisionService();
 const annotationService = new AnnotationService();
+const catalogoService = new CatalogoPlayerService();
 
 // ─── Avatar VRM (Three.js + Kalidokit) ──────────────────────────────────────
 const avatarViewer = new VrmAvatarViewer({ container: avatarContainer });
@@ -63,12 +75,94 @@ avatarViewer
   .then(() => {
     avatarLoading.classList.add('oculto');
     avatarViewer.start();
-    console.log('[main] ✓ Avatar VRM listo y animando con Kalidokit.');
+    console.log('[main] ✓ Avatar VRM listo y animando.');
   })
   .catch((err) => {
     console.error('[main] Error al cargar avatar VRM:', err);
     avatarLoading.querySelector('.avatar-loading-text')!.textContent = 'Error al cargar avatar';
   });
+
+// ─── Inicialización del Catálogo de Señas (RF-07) ─────────────────────────────
+catalogoService.loadCatalog().then((senas) => {
+  selectCatalogoSena.innerHTML = '';
+  if (senas.length === 0) {
+    const opt = document.createElement('option');
+    opt.textContent = 'Sin señas disponibles';
+    selectCatalogoSena.appendChild(opt);
+    return;
+  }
+
+  senas.forEach((s) => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = `${s.glosa} (Unidad ${s.unidad_tematica} • ${s.dificultad})`;
+    selectCatalogoSena.appendChild(opt);
+  });
+
+  updateFonologiaDisplay();
+});
+
+function updateFonologiaDisplay(): void {
+  const sena = catalogoService.getSelectedSena();
+  if (sena) {
+    const params = sena.parametros_fonologicos;
+    const toponema = params.toponema_ubicacion.zona_corporal.replace('_', ' ');
+    const kinesema = params.kinesema_movimiento.tipo_movimiento;
+    const queirema = params.queirema_configuracion.codigo_forma.replace('_', ' ');
+    fonologiaInfo.textContent = `Toponema: ${toponema} • Mov: ${kinesema} • Forma: ${queirema}`;
+    sliderPlayerProgress.max = (sena.frames.length - 1).toString();
+    sliderPlayerProgress.value = '0';
+    playerTimeDisplay.textContent = `0/${sena.frames.length}`;
+  }
+}
+
+selectCatalogoSena.addEventListener('change', () => {
+  catalogoService.selectSena(selectCatalogoSena.value);
+  updateFonologiaDisplay();
+  if (catalogoService.getIsPlaying()) {
+    catalogoService.play();
+  }
+});
+
+// ─── Controles del Reproductor (RF-08) ───────────────────────────────────────
+btnPlayerPlay.addEventListener('click', () => {
+  const isNowPlaying = catalogoService.togglePlay();
+  if (isNowPlaying) {
+    btnPlayerPlay.textContent = '⏸ Pausar';
+    btnPlayerPlay.classList.add('playing');
+  } else {
+    btnPlayerPlay.textContent = '▶ Reproducir';
+    btnPlayerPlay.classList.remove('playing');
+  }
+});
+
+btnPlayerSpeed.addEventListener('click', () => {
+  const currentSpeed = catalogoService.getSpeed();
+  const nextSpeed = currentSpeed === 1.0 ? 0.5 : 1.0;
+  catalogoService.setSpeed(nextSpeed);
+  btnPlayerSpeed.textContent = `${nextSpeed.toFixed(1)}×`;
+  btnPlayerSpeed.title = nextSpeed === 0.5 ? 'Velocidad Lenta (0.5x)' : 'Velocidad Normal (1.0x)';
+});
+
+sliderPlayerProgress.addEventListener('input', () => {
+  const targetFrame = parseInt(sliderPlayerProgress.value);
+  catalogoService.seekFrame(targetFrame);
+  const sena = catalogoService.getSelectedSena();
+  if (sena && sena.frames[targetFrame]) {
+    const update = catalogoService.update(performance.now());
+    if (update.landmarks) {
+      avatarViewer.updatePose(update.landmarks);
+    }
+    playerTimeDisplay.textContent = `${targetFrame}/${sena.frames.length}`;
+  }
+});
+
+btnPlayerRestart.addEventListener('click', () => {
+  catalogoService.seekFrame(0);
+  catalogoService.play();
+  btnPlayerPlay.textContent = '⏸ Pausar';
+  btnPlayerPlay.classList.add('playing');
+});
 
 // ─── Estado de la app ────────────────────────────────────────────────────────
 let isSimulating = false;
@@ -88,7 +182,7 @@ function syncCanvasSize() {
 
 window.addEventListener('resize', syncCanvasSize);
 
-// ─── Bucle de renderizado del espejo (RAF) ───────────────────────────────────
+// ─── Bucle de renderizado principal (RAF) ────────────────────────────────────
 function animationLoop(timestamp: number) {
   frameCount++;
   if (timestamp - lastTimestamp >= 1000) {
@@ -100,15 +194,16 @@ function animationLoop(timestamp: number) {
 
   syncCanvasSize();
 
-  let landmarks: HolisticFrameLandmarks = {};
+  let userLandmarks: HolisticFrameLandmarks = {};
 
+  // 1. Obtención de landmarks del usuario (cámara o simulación)
   if (isSimulating) {
-    landmarks = renderer.generateSyntheticPose(timestamp);
+    userLandmarks = renderer.generateSyntheticPose(timestamp);
     encuadreBox?.classList.add('valido');
   } else if (cameraService.isRunning()) {
     if (visionService.getReadyStatus()) {
       const detection = visionService.detect(video, timestamp);
-      landmarks = detection.landmarks;
+      userLandmarks = detection.landmarks;
 
       if (detection.encuadreValido) {
         encuadreBox?.classList.add('valido');
@@ -123,13 +218,13 @@ function animationLoop(timestamp: number) {
     encuadreBox?.classList.remove('valido');
   }
 
-  if (landmarks.pose || landmarks.rightHand || landmarks.leftHand) {
-    renderer.render(landmarks);
-    avatarViewer.updatePose(landmarks);
+  // 2. Renderizado del espejo del usuario
+  if (userLandmarks.pose || userLandmarks.rightHand || userLandmarks.leftHand) {
+    renderer.render(userLandmarks);
 
     // Registro continuo si la grabación del anotador está activa
     if (annotationService.getIsRecording()) {
-      annotationService.recordFrame(landmarks);
+      annotationService.recordFrame(userLandmarks);
       const frames = annotationService.getRecordedFrames();
       const lastFrame = frames[frames.length - 1];
       const durSec = (lastFrame.timestamp_ms / 1000).toFixed(1);
@@ -137,6 +232,22 @@ function animationLoop(timestamp: number) {
     }
   } else {
     renderer.clear();
+  }
+
+  // 3. Control de animación del Avatar Guía 3D
+  // Si el reproductor del catálogo está activo, el avatar demuestra la seña de referencia (RF-08)
+  if (catalogoService.getIsPlaying()) {
+    const playerUpdate = catalogoService.update(timestamp);
+    if (playerUpdate.landmarks) {
+      avatarViewer.updatePose(playerUpdate.landmarks);
+      sliderPlayerProgress.value = playerUpdate.frameIndex.toString();
+      playerTimeDisplay.textContent = `${playerUpdate.frameIndex}/${playerUpdate.totalFrames}`;
+    }
+  } else if (userLandmarks.pose || userLandmarks.rightHand || userLandmarks.leftHand) {
+    // Si el reproductor está pausado y el usuario está practicando, el avatar refleja en vivo (RF-42)
+    avatarViewer.updatePose(userLandmarks);
+  } else {
+    // Si no hay entrada activa, el avatar permanece en pose neutral de descanso
     avatarViewer.updatePose({});
   }
 
@@ -157,7 +268,6 @@ btnToggleCamera.addEventListener('click', async () => {
       statusDisplay.textContent = 'Cámara detenida';
       statusDisplay.className = 'status-indicator';
       renderer.clear();
-      avatarViewer.updatePose({});
       encuadreBox?.classList.remove('valido');
     } else {
       isSimulating = false;
@@ -210,7 +320,6 @@ btnToggleSynthetic.addEventListener('click', () => {
     statusDisplay.textContent = 'En espera';
     statusDisplay.className = 'status-indicator';
     renderer.clear();
-    avatarViewer.updatePose({});
   }
 });
 
@@ -231,10 +340,9 @@ btnCerrarAnotador.addEventListener('click', () => {
   tabPractica.click();
 });
 
-// ─── Controles de Grabación de Seña ──────────────────────────────────────────
+// ─── Controles de Grabación de Seña (RF-36) ──────────────────────────────────
 btnRecordSena.addEventListener('click', () => {
   if (!annotationService.getIsRecording()) {
-    // Iniciar grabación
     if (!cameraService.isRunning() && !isSimulating) {
       alert('Por favor enciende la cámara o activa el Modo Simulación antes de grabar.');
       return;
@@ -246,14 +354,12 @@ btnRecordSena.addEventListener('click', () => {
     recordStatus.style.color = '#ef4444';
     exportMsg.textContent = '';
   } else {
-    // Detener grabación
     const stats = annotationService.stopRecording();
     btnRecordSena.textContent = '⏺ Grabar Nueva Toma';
     btnRecordSena.classList.remove('recording');
     recordStatus.textContent = `Grabación finalizada (${stats.totalFrames} frames)`;
     recordStatus.style.color = '#22c55e';
 
-    // Ajustar límites de los sliders de segmentación
     const maxIdx = Math.max(0, stats.totalFrames - 1);
     sliderFrameInicio.max = maxIdx.toString();
     sliderFrameFin.max = maxIdx.toString();
@@ -264,7 +370,6 @@ btnRecordSena.addEventListener('click', () => {
   }
 });
 
-// Sincronización de sliders de segmentación
 sliderFrameInicio.addEventListener('input', () => {
   lblFrameInicio.textContent = sliderFrameInicio.value;
   if (parseInt(sliderFrameInicio.value) > parseInt(sliderFrameFin.value)) {
