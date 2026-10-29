@@ -85,17 +85,36 @@ export class SkeletonRenderer {
 
     // 2. Renderizar Pose (Torso y Brazos)
     if (landmarks.pose && landmarks.pose.length > 0) {
-      this.drawConnections(landmarks.pose, POSE_UPPER_CONNECTIONS, '#38bdf8', 3, w, h);
-      this.drawPoints(landmarks.pose, '#0284c7', 5, w, h, [0, 11, 12, 13, 14, 15, 16]);
+      const activeConnections: [number, number][] = [
+        [11, 12],
+        [0, 11],
+        [0, 12],
+        [11, 13], // Hombro izq -> Codo izq
+        [12, 14]  // Hombro der -> Codo der
+      ];
 
-      // Conexión dinámica antebrazo a carpo de mano izquierda
-      if (landmarks.leftHand && landmarks.leftHand.length === 21 && landmarks.pose[15]) {
-        this.drawDirectLine(landmarks.pose[15], landmarks.leftHand[0], '#38bdf8', 2.5, w, h);
+      const hasRightHand = !!(landmarks.rightHand && landmarks.rightHand.length === 21);
+      const hasLeftHand = !!(landmarks.leftHand && landmarks.leftHand.length === 21);
+
+      // Si la mano correspondiente NO está detectada, recurrir al antebrazo de pose
+      if (!hasLeftHand) {
+        activeConnections.push([13, 15]);
+      }
+      if (!hasRightHand) {
+        activeConnections.push([14, 16]);
       }
 
-      // Conexión dinámica antebrazo a carpo de mano derecha
-      if (landmarks.rightHand && landmarks.rightHand.length === 21 && landmarks.pose[16]) {
-        this.drawDirectLine(landmarks.pose[16], landmarks.rightHand[0], '#38bdf8', 2.5, w, h);
+      this.drawConnections(landmarks.pose, activeConnections, '#38bdf8', 3, w, h);
+      this.drawPoints(landmarks.pose, '#0284c7', 5, w, h, [0, 11, 12, 13, 14, 15, 16]);
+
+      // Conexión anatómica continua: Codo -> Muñeca real (Landmark 0 de la mano)
+      // Garantiza continuidad ósea y elimina líneas diagonales cruzadas sobre el torso
+      if (hasRightHand && landmarks.pose[14] && landmarks.rightHand) {
+        this.drawDirectLine(landmarks.pose[14], landmarks.rightHand[0], '#38bdf8', 2.5, w, h);
+      }
+
+      if (hasLeftHand && landmarks.pose[13] && landmarks.leftHand) {
+        this.drawDirectLine(landmarks.pose[13], landmarks.leftHand[0], '#38bdf8', 2.5, w, h);
       }
     }
 
@@ -120,6 +139,10 @@ export class SkeletonRenderer {
     w: number,
     h: number
   ): void {
+    if ((p1.visibility !== undefined && p1.visibility < 0.25) ||
+        (p2.visibility !== undefined && p2.visibility < 0.25)) {
+      return;
+    }
     this.ctx.save();
     this.ctx.strokeStyle = color;
     this.ctx.lineWidth = lineWidth;
