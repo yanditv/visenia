@@ -85,9 +85,9 @@ export class VrmAvatarViewer {
     this.scene.background = new THREE.Color(0x0b1120);
 
     // 2. Cámara enfocando busto y brazos (zona clave para lengua de señas)
-    this.camera = new THREE.PerspectiveCamera(28.0, w / h, 0.1, 20.0);
-    this.camera.position.set(0.0, 1.3, 2.0);
-    this.camera.lookAt(0, 1.1, 0);
+    this.camera = new THREE.PerspectiveCamera(32.0, w / h, 0.1, 20.0);
+    this.camera.position.set(0.0, 1.18, 2.35);
+    this.camera.lookAt(0, 1.05, 0);
 
     // 3. Renderizador WebGL — el canvas se inyecta en el contenedor
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -141,7 +141,7 @@ export class VrmAvatarViewer {
           // Limpieza de mallas y orientación
           VRMUtils.removeUnnecessaryVertices(gltf.scene);
           VRMUtils.removeUnnecessaryJoints(gltf.scene);
-          vrm.scene.rotation.y = Math.PI;
+          vrm.scene.rotation.y = 0;
 
           if (this.currentVrm) {
             this.scene.remove(this.currentVrm.scene);
