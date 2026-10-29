@@ -1,10 +1,10 @@
 /**
  * Carga y control del Avatar VRM con Three.js y Kalidokit (RF-42, ADR-002)
  *
- * Sprint 1 (PR #12): Spike técnico de animación en tiempo real con Kalidokit.
+ * Sprint 1: Spike técnico de animación en tiempo real con Kalidokit.
  * Mapea:
  * - Pose superior (torso, hombros, codos, muñecas) desde pose_world + pose 2D
- * - Dedos (21 landmarks por mano -> 15 articulaciones VRM)
+ * - Dedos (21 landmarks por mano -> 15 articulaciones VRM) y orientación de muñeca (HandSolver)
  * - Blendshapes faciales para expresiones prosoponémicas
  * - Prioridad para vrm_pose_override (ADR-002)
  *
@@ -84,7 +84,7 @@ export class VrmAvatarViewer {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x0b1120);
 
-    // 2. Cámara enfocando busto y brazos (zona clave para lengua de señas)
+    // 2. Cámara enfocando busto, cabeza y brazos (campo visual calibrado para lengua de señas)
     this.camera = new THREE.PerspectiveCamera(32.0, w / h, 0.1, 20.0);
     this.camera.position.set(0.0, 1.18, 2.35);
     this.camera.lookAt(0, 1.05, 0);
@@ -138,7 +138,7 @@ export class VrmAvatarViewer {
             return;
           }
 
-          // Limpieza de mallas y orientación
+          // Limpieza de mallas y orientación frontal nativa
           VRMUtils.removeUnnecessaryVertices(gltf.scene);
           VRMUtils.removeUnnecessaryJoints(gltf.scene);
           vrm.scene.rotation.y = 0;
@@ -197,10 +197,10 @@ export class VrmAvatarViewer {
         );
 
         if (hasLiveInput && this.latestLandmarks) {
-          // ─── Cinemática activa con Kalidokit ─────────────────────────────
+          // Cinemática activa con Kalidokit
           this.applyKalidokitRetargeting(this.latestLandmarks);
         } else {
-          // ─── Pose de descanso neutral cuando no hay detección ───────────
+          // Pose de descanso neutral cuando no hay detección
           this.applyRestingPose(elapsed);
         }
 
@@ -220,35 +220,73 @@ export class VrmAvatarViewer {
   private applyKalidokitRetargeting(landmarks: HolisticFrameLandmarks): void {
     if (!this.currentVrm) return;
 
-    // 1. Pose corporal (brazos, torso)
+    // 1. Pose corporal adaptada para Kalidokit
+    // MediaPipe entrega landmarks desde la perspectiva del sensor.
+    // Para que Kalidokit calcule las rotaciones con la orientación lateral correcta:
+    // Mapeamos los índices laterales (11<->12 hombros, 13<->14 codos, 15<->16 muñecas) e invertimos X.
     if (landmarks.pose && landmarks.poseWorld && landmarks.pose.length >= 25 && landmarks.poseWorld.length >= 25) {
       try {
+        const pw = landmarks.poseWorld;
+        const p2 = landmarks.pose;
+
+        const adaptedWorld = pw.map((pt, idx) => {
+          let target = pt;
+          if (idx === 11) target = pw[12];
+          else if (idx === 12) target = pw[11];
+          else if (idx === 13) target = pw[14];
+          else if (idx === 14) target = pw[13];
+          else if (idx === 15) target = pw[16];
+          else if (idx === 16) target = pw[15];
+          return { x: -target.x, y: target.y, z: target.z, visibility: target.visibility };
+        });
+
+        const adaptedPose = p2.map((pt, idx) => {
+          let target = pt;
+          if (idx === 11) target = p2[12];
+          else if (idx === 12) target = p2[11];
+          else if (idx === 13) target = p2[14];
+          else if (idx === 14) target = p2[13];
+          else if (idx === 15) target = p2[16];
+          else if (idx === 16) target = p2[15];
+          return { x: 1.0 - target.x, y: target.y, z: target.z, visibility: target.visibility };
+        });
+
         const poseRig = KalidoPose.solve(
-          landmarks.poseWorld as any,
-          landmarks.pose as any,
+          adaptedWorld as any,
+          adaptedPose as any,
           { runtime: 'mediapipe', enableLegs: false }
         );
 
         if (poseRig) {
           this.rigBone(VRMHumanBoneName.Hips, poseRig.Hips?.rotation, 0.7, 0.3);
           this.rigBone(VRMHumanBoneName.Spine, poseRig.Spine as any, 0.5, 0.3);
-          this.rigBone(VRMHumanBoneName.RightUpperArm, poseRig.RightUpperArm, 1.0, 0.5);
-          this.rigBone(VRMHumanBoneName.RightLowerArm, poseRig.RightLowerArm, 1.0, 0.5);
-          this.rigBone(VRMHumanBoneName.LeftUpperArm, poseRig.LeftUpperArm, 1.0, 0.5);
-          this.rigBone(VRMHumanBoneName.LeftLowerArm, poseRig.LeftLowerArm, 1.0, 0.5);
-          this.rigBone(VRMHumanBoneName.RightHand, poseRig.RightHand as any, 1.0, 0.5);
-          this.rigBone(VRMHumanBoneName.LeftHand, poseRig.LeftHand as any, 1.0, 0.5);
+          this.rigBone(VRMHumanBoneName.RightUpperArm, poseRig.RightUpperArm, 1.0, 0.6);
+          this.rigBone(VRMHumanBoneName.RightLowerArm, poseRig.RightLowerArm, 1.0, 0.6);
+          this.rigBone(VRMHumanBoneName.LeftUpperArm, poseRig.LeftUpperArm, 1.0, 0.6);
+          this.rigBone(VRMHumanBoneName.LeftLowerArm, poseRig.LeftLowerArm, 1.0, 0.6);
+
+          // Si no hay detección detallada de mano, usar orientación de muñeca de la pose
+          if (!landmarks.rightHand) {
+            this.rigBone(VRMHumanBoneName.RightHand, poseRig.RightHand as any, 1.0, 0.5);
+          }
+          if (!landmarks.leftHand) {
+            this.rigBone(VRMHumanBoneName.LeftHand, poseRig.LeftHand as any, 1.0, 0.5);
+          }
         }
       } catch (err) {
         console.warn('[VrmAvatarViewer] Error al resolver Pose con Kalidokit:', err);
       }
     }
 
-    // 2. Dedos mano derecha (21 puntos)
+    // 2. Dedos y muñeca mano derecha (21 puntos)
     if (landmarks.rightHand && landmarks.rightHand.length === 21) {
       try {
         const rightRig = KalidoHand.solve(landmarks.rightHand as any, 'Right');
         if (rightRig) {
+          // Orientación anatómica de muñeca derecha calculada por HandSolver
+          if (rightRig.RightWrist) {
+            this.rigBone(VRMHumanBoneName.RightHand, rightRig.RightWrist, 1.0, 0.6);
+          }
           for (const mapping of RIGHT_FINGER_MAPPINGS) {
             const rot = (rightRig as any)[mapping.rigKey];
             if (rot) {
@@ -261,11 +299,15 @@ export class VrmAvatarViewer {
       }
     }
 
-    // 3. Dedos mano izquierda (21 puntos)
+    // 3. Dedos y muñeca mano izquierda (21 puntos)
     if (landmarks.leftHand && landmarks.leftHand.length === 21) {
       try {
         const leftRig = KalidoHand.solve(landmarks.leftHand as any, 'Left');
         if (leftRig) {
+          // Orientación anatómica de muñeca izquierda calculada por HandSolver
+          if (leftRig.LeftWrist) {
+            this.rigBone(VRMHumanBoneName.LeftHand, leftRig.LeftWrist, 1.0, 0.6);
+          }
           for (const mapping of LEFT_FINGER_MAPPINGS) {
             const rot = (leftRig as any)[mapping.rigKey];
             if (rot) {
