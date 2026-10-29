@@ -14,7 +14,7 @@ El objetivo principal del **Sprint 1** ha sido implementar el entorno interactiv
 2. **Panel Derecho (Avatar VRM y Catálogo Fonológico):** Integración del modelo 3D oficial `MODELVIS1.0_optimizado_v2.vrm` (`visenia.vrm`), cinemática directa con Three.js, articulación de dedos según el parámetro fonológico de *Queirema*, reproductor de catálogo canónico a 1.0x y 0.5x, y separación funcional estricta entre **Modo Guía** y **Reflejo en Vivo**.
 3. **Herramienta de Anotación Fonológica:** Drawer expandible para captura, recorte temporal por sliders y exportación de referencias compatibles con el esquema maestro `referencia.schema.json v1.1.0`.
 
-Durante el ciclo de desarrollo se resolvieron incidencias críticas de biomecánica, orientación espacial, corrupción binaria de modelos y experiencia de usuario. A continuación se detalla cada uno de los **11 Pull Requests y 22 commits** aplicados en el repositorio local.
+Durante el ciclo de desarrollo se resolvieron incidencias críticas de biomecánica, orientación espacial, corrupción binaria de modelos y experiencia de usuario. A continuación se detalla cada uno de los **14 Pull Requests y 28 commits** aplicados en el repositorio local.
 
 ---
 
@@ -56,7 +56,16 @@ flowchart TD
     PR19 --> B20["fix/S1-ui-limpieza-rf-coherencia-espejo"]
 
     B20 --> PR20["PR #20: Limpieza total RF, remoción overlay y espejo real (commit 68d4562)"]
-    PR20 --> S1_FINAL["main (Sprint 1 Completado y Operativo)"]
+    PR20 --> B21["fix/S1-avatar-cinematica-y-lateralidad"]
+
+    B21 --> PR21["PR #21: Reposo, lateralidad y cinemática 3D (commit 1f4b9c8)"]
+    PR21 --> B22["fix/S1-catalogo-tiempo-y-segmentacion"]
+
+    B22 --> PR22["PR #22: Segmentación y tiempos reales (commit 6c64d65)"]
+    PR22 --> B23["fix/S1-integracion-guia-espejo"]
+
+    B23 --> PR23["PR #23: Integración guía/espejo y calibración VRM (commit 1becce3)"]
+    PR23 --> S1_FINAL["main (Sprint 1 Completado, Verificado y Operativo)"]
 ```
 
 ---
@@ -76,6 +85,9 @@ flowchart TD
 | **#18** | `fix/S1-landmarks-lateral-kinematic-coherence` | `97a7777` | RF-02, RF-42 | Conexión directa codo-carpo, desempate de manos por centro de masa y anclaje de torso. |
 | **#19** | `fix/S1-cinematica-espejo-manos-guia` | `a608268` | RF-07, RF-08, RF-42 | Cinemática vectorial con inversión de eje $Y$, articulación de dedos y switch Guía/Espejo. |
 | **#20** | `fix/S1-ui-limpieza-rf-coherencia-espejo` | `68d4562` | RF-01, RF-07, RF-42 | Erradicación de textos técnicos "RF", remoción de HUD gigante y sincronización lateral exacta. |
+| **#21** | `fix/S1-avatar-cinematica-y-lateralidad` | `1f4b9c8` | RF-42, ADR-002 | Postura de reposo fisiológica, neutralización de pulgares, cinemática 3D por poseWorld y normal de palma sin sesgo. |
+| **#22** | `fix/S1-catalogo-tiempo-y-segmentacion` | `6c64d65` | RF-07, RF-08, RF-36, ERS-6.1 | Reproducción por marcas de tiempo relativas irregulares, respeto de límites de segmento y control estricto de FPS. |
+| **#23** | `fix/S1-integracion-guia-espejo` | `1becce3` | RF-01, RF-07, RF-08, RF-36, RF-42 | Integración y desacoplamiento de fuentes (guía/espejo), calibración de rig con visenia.vrm y 22 pruebas automatizadas. |
 
 ---
 
@@ -324,6 +336,68 @@ flowchart TD
 
 ---
 
+### PR #21: Corrección de Reposo, Lateralidad y Cinemática 3D del Avatar
+- **Rama:** `fix/S1-avatar-cinematica-y-lateralidad`
+- **Commits:** `e3c427e` (feature), `1f4b9c8` (merge `--no-ff`)
+- **Requerimientos:** `RF-42`, `ADR-002`
+
+#### 1. Error que presentaba:
+- **Tensión antinatural en postura de reposo:** Al entrar en resting pose, el avatar mantenía los pulgares hiperextendidos hacia afuera y los brazos en una rotación forzada que no correspondía a una postura anatómica relajada de descanso.
+- **Mezcla espuria de componentes Z:** El retargeting mezclaba coordenadas $Z$ de la mano con las del cuerpo provenientes de la cámara en pantalla, produciendo deformaciones en los codos cuando las manos se desplazaban en profundidad.
+- **Normal de palma desfasada:** El cálculo de orientación de la muñeca no consideraba la profundidad tridimensional entre las falanges metacarpianas, causando que la palma se torciera en giros complejos.
+- **Colisión de etiquetas de manos cruzadas:** Si MediaPipe clasificaba incorrectamente la lateralidad cuando ambas manos se cruzaban en el centro del pecho, los brazos del avatar se invertían o colapsaban.
+
+#### 2. Causa técnica y Solución implementada:
+- **Reposo anatómico neutral:** Se calibraron las rotaciones base de reposo para dejar caer los brazos naturalmente a los lados y neutralizar por completo las articulaciones metacarpianas y proximales de los pulgares (`applyRestingPose`).
+- **Cinemática basada en `poseWorldLandmarks`:** Se aisló el cálculo de orientación de hombros y codos utilizando coordenadas tridimensionales de espacio métrico real (`poseWorldLandmarks[11..16]`), eliminando la contaminación de profundidad de los landmarks 2D proyectados en pantalla.
+- **Orientación tridimensional de la palma:** Se implementó el vector normal de la palma mediante el producto cruz ortonormal entre el vector muñeca-índice y el vector muñeca-meñique:
+  $$\vec{n}_{\text{palma}} = \text{normalize}\big( (\vec{p}_{\text{índice}} - \vec{p}_{\text{muñeca}}) \times (\vec{p}_{\text{meñique}} - \vec{p}_{\text{muñeca}}) \big)$$
+  garantizando que la orientación espacial de la muñeca sea coherente en cualquier ángulo.
+- **Asociación robusta de manos por proximidad espacial:** Se sustituyó la dependencia ciega de la etiqueta textual de handedness por una búsqueda del vecino más cercano en base euclidiana a las muñecas de pose (`pose[15]` y `pose[16]`), resolviendo cruces de manos sin invertir la lateralidad.
+- **Batería de pruebas unitarias:** Creación de `app/tests/avatar.test.cjs` con 10 pruebas unitarias para validar reposo, pulgares, desacoplamiento $Z$, overrides exactos y orientación de palma.
+
+---
+
+### PR #22: Segmentación y Tiempos Reales de Captura en Catálogo y Anotador
+- **Rama:** `fix/S1-catalogo-tiempo-y-segmentacion`
+- **Commits:** `7540c12` (feature), `6c64d65` (merge `--no-ff`)
+- **Requerimientos:** `RF-07`, `RF-08`, `RF-36`, `ERS-6.1`
+
+#### 1. Error que presentaba:
+- **Desincronización por asunción de FPS constante:** `CatalogoPlayerService` avanzaba la animación asumiendo fotogramas a intervalos fijos de tiempo, provocando aceleraciones o ralentizaciones artificiales al reproducir capturas con intervalos reales irregulares (`timestamp_ms`).
+- **Incumplimiento de límites de recorte:** Al definir un subrango (`frame_inicio_sena` y `frame_fin_sena`) en el anotador o catálogo, el reproductor seguía leyendo desde el índice 0 o desbordaba el final, reproduciendo cuadros vacíos o saltos bruscos.
+- **Pérdida de posición temporal en cambios de estado:** Conmutar entre 1.0x y 0.5x, o pausar y reanudar, reiniciaba el acumulador de tiempo o desfasaba la interpolación de fotogramas.
+- **Falsificación silenciosa de FPS en exportación:** Cuando una captura se realizaba en un dispositivo con baja tasa de refresco (< 15 fps), el exportador recalculaba los metadatos para simular 30 fps, generando referencias fuera del estándar técnico de calidad.
+
+#### 2. Causa técnica y Solución implementada:
+- **Motor de interpolación gobernado por timestamps reales:** En [app/src/catalogo/catalogo-service.ts](file:///c:/VISPROY/visenia/app/src/catalogo/catalogo-service.ts), el avance de la reproducción calcula el tiempo transcurrido exacto con `performance.now()` y busca los dos fotogramas circundantes según sus marcas `timestamp_ms` relativas, realizando una interpolación temporal continua.
+- **Respeto estricto de extremos de segmento:** `selectSena()`, `seekFrame()` y el bucle continuo respetan estrictamente los límites `inicio` y `fin` de la seña. Al alcanzar el final en bucle, se reinicia al fotograma inicial conservando el sobrante temporal exacto para garantizar una transición suave.
+- **Preservación de tiempo transcurrido:** La conmutación entre `1.0x` y `0.5x` y la pausa preservan el progreso temporal normalizado acumulado sin reinicios.
+- **Validación estricta de tasa de fotogramas:** En [app/src/anotador/annotation-service.ts](file:///c:/VISPROY/visenia/app/src/anotador/annotation-service.ts), se incorporó una regla de control: si la captura promedia menos de 15 FPS reales, la exportación se rechaza con un mensaje descriptivo para el lingüista en lugar de falsear la tasa de captura.
+- **Batería de pruebas unitarias:** Creación de `app/tests/catalogo.test.cjs` con 7 pruebas que validan seek, interpolación irregular, bucle con sobrante y validación de FPS mínimos.
+
+---
+
+### PR #23: Integración Guía, Espejo y Calibración del Rig VRM
+- **Rama:** `fix/S1-integracion-guia-espejo`
+- **Commits:** `351ebd1` (feature), `1becce3` (merge `--no-ff`)
+- **Requerimientos:** `RF-01`, `RF-07`, `RF-08`, `RF-36`, `RF-42`
+
+#### 1. Error que presentaba:
+- **Discrepancia cinemática con el modelo real `visenia.vrm`:** El solver matemático funcionaba en mocks teóricos, pero en el modelo real de Three.js la orientación del nodo óseo de la palma presentaba una inversión de ejes respecto al espacio local del GLTF.
+- **Desalineación visual en panel responsivo:** Al redimensionar el navegador o expandir el drawer de anotación, el canvas 2D del esqueleto y el video de cámara se desajustaban en posición y escala.
+- **Interferencia entre scrubbing y modo espejo:** Arrastrar la barra del reproductor mientras el selector de modo estaba en transición podía enviar comandos de sobreescritura al avatar en modo espejo.
+- **Datos de catálogo con coordenadas inconsistentes:** Las referencias iniciales de catálogo contenían fotogramas donde la mano derecha tenía valores de profundidad fuera de rango anatómico.
+
+#### 2. Causa técnica y Solución implementada:
+- **Calibración empírica con el rig real de VRM:** En [app/tests/vrm-real.test.cjs](file:///c:/VISPROY/visenia/app/tests/vrm-real.test.cjs), se ejecutaron pruebas de validación cargando la jerarquía completa de huesos del archivo `MODELVIS1.0_optimizado_v2.vrm`, adaptando la matriz de rotación de la muñeca para asegurar que la palma frontal mantenga su normal anatómica apuntando hacia el interlocutor.
+- **Sincronización geométrica responsiva 1:1:** En [app/src/render/skeleton-renderer.ts](file:///c:/VISPROY/visenia/app/src/render/skeleton-renderer.ts) y [app/src/style.css](file:///c:/VISPROY/visenia/app/src/style.css), el canvas del esqueleto se acopló directamente al tamaño y relación de aspecto del elemento `<video>`, eliminando cualquier desfasaje espacial.
+- **Blindaje y desacoplamiento de canales:** En [app/src/main.ts](file:///c:/VISPROY/visenia/app/src/main.ts), se aisló la lógica de renderizado: si el modo activo es `Guía`, los fotogramas del catálogo tienen control exclusivo del avatar y el scrubbing no interfiere con el tracking de la cámara.
+- **Saneamiento de referencias y respaldo anatómico:** Se sanearon los fotogramas de catálogo asegurando coordenadas continuas y una mano abierta de demostración limpia para visualización de señas.
+- **Pruebas integrales de extremo a extremo:** Creación de `app/tests/integracion.test.cjs`. La suite completa del proyecto asciende a **22 pruebas automatizadas (10 avatar, 7 catálogo, 5 integración y modelo real)** pasando al 100%.
+
+---
+
 ## 5. Resumen de Buenas Prácticas y Calibraciones Críticas
 
 1. **Integridad de Modelos ZIP de MediaPipe:**
@@ -341,7 +415,8 @@ flowchart TD
 ## 6. Estado Final y Verificación del Repositorio
 
 - **Compilación TypeScript:** `npx tsc --noEmit` $\rightarrow$ **0 errores**.
-- **Empaquetado de producción:** `npx vite build` $\rightarrow$ **Éxito (dist/ generado en 1.01s)**.
+- **Empaquetado de producción:** `npx vite build` $\rightarrow$ **Éxito (dist/ generado en 1.52s)**.
+- **Batería de Pruebas Automatizadas:** `npm test` $\rightarrow$ **22 pruebas pasando al 100% (0 fallos)**.
 - **Servidor de desarrollo local:** Operativo en `http://localhost:5173/` vía tarea en segundo plano.
-- **Ramas locales:** Las **11 ramas del Sprint 1 y ramas de Semana 0** se encuentran preservadas intactas en el repositorio local.
+- **Ramas locales:** Las **14 ramas del Sprint 1 y ramas de Semana 0** se encuentran preservadas intactas en el repositorio local.
 - **Políticas de Git:** Cumplimiento total de la regla de no realizar pushes a remoto (`origin/main` intacto) y no eliminar ramas locales.
