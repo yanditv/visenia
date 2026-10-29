@@ -2,12 +2,10 @@
  * Servicio de Inferencia en Tiempo Real con MediaPipe Tasks Vision (RF-01, RF-02)
  * Procesa frames de video de la cámara para detectar:
  * - Pose (2D normalizado y World 3D métrico)
- * - Manos (21 landmarks por mano, con umbrales calibrados para articulaciones sobre el pecho)
+ * - Manos (21 landmarks por mano, con resolución anatómica de lateralidad por proximidad de muñecas)
  * - Rostro (Blendshapes ARKit/VRM y landmarks de contorno facial)
  *
- * Carga robusta (PR #10): cada modelo se inicializa de forma independiente con
- * Promise.allSettled. Si un modelo falla (ej. archivo .task corrupto), los demás
- * continúan activos. El servicio es funcional mientras Pose y Manos estén disponibles.
+ * Carga robusta: cada modelo se inicializa de forma independiente con Promise.allSettled.
  */
 import {
   FilesetResolver,
@@ -50,6 +48,7 @@ export class VisionService {
       // Carga independiente: un modelo fallido no impide que los demás funcionen
       const resultados = await Promise.allSettled([
         // 1. Detector de Pose corporal (landmarks 2D + world 3D en metros)
+        // Umbral calibrado a 0.3 para seguimiento continuo en planos medios/busto sin perder articulaciones
         PoseLandmarker.createFromOptions(wasmFileset, {
           baseOptions: {
             modelAssetPath: '/models/pose_landmarker.task',
@@ -57,9 +56,9 @@ export class VisionService {
           },
           runningMode: 'VIDEO',
           numPoses: 1,
-          minPoseDetectionConfidence: 0.5,
-          minPosePresenceConfidence: 0.5,
-          minTrackingConfidence: 0.5
+          minPoseDetectionConfidence: 0.3,
+          minPosePresenceConfidence: 0.3,
+          minTrackingConfidence: 0.3
         }),
 
         // 2. Detector de Manos (calibrado a 0.3 para evitar pérdida sobre ropa/pecho)
@@ -90,7 +89,6 @@ export class VisionService {
         })
       ]);
 
-      // Asignar modelos que cargaron correctamente; loguear los que fallaron
       const [rPose, rHand, rFace] = resultados;
 
       if (rPose.status === 'fulfilled') {
@@ -114,7 +112,6 @@ export class VisionService {
         console.error('[VisionService] ✗ FaceLandmarker falló:', (rFace as PromiseRejectedResult).reason);
       }
 
-      // El servicio es funcional si al menos Pose y Manos están disponibles
       if (this.poseLandmarker && this.handLandmarker) {
         this.isReady = true;
         const rostroEstado = this.faceLandmarker
@@ -181,25 +178,57 @@ export class VisionService {
       }
     }
 
-    // 2. Inferencia de Manos (con soporte para pecho / contrastes bajos)
+    // 2. Inferencia de Manos con resolución anatómica robusta de lateralidad
     if (this.handLandmarker) {
       const handResult = this.handLandmarker.detectForVideo(video, timestamp);
       if (handResult.landmarks && handResult.landmarks.length > 0) {
-        handResult.landmarks.forEach((handPoints, idx) => {
-          const handedness = handResult.handedness[idx]?.[0]?.categoryName;
+        // En una cámara web frontal no reflejada en el sensor (unmirrored raw buffer):
+        // MediaPipe asume 'selfie' por defecto, por lo que:
+        // - categoryName === 'Left' corresponde a la mano DERECHA anatómica del usuario.
+        // - categoryName === 'Right' corresponde a la mano IZQUIERDA anatómica del usuario.
+        // Además, en el espacio del sensor, el hombro derecho (pose[12]) tiene menor X que el hombro izquierdo (pose[11]).
+        const xCenter = (result.pose?.[11]?.x && result.pose?.[12]?.x)
+          ? (result.pose[11].x + result.pose[12].x) / 2
+          : 0.5;
+
+        const detectedHands = handResult.landmarks.map((handPoints, idx) => {
           const mappedPoints: LandmarkPoint[] = handPoints.map((lm) => ({
             x: lm.x,
             y: lm.y,
             z: lm.z,
             visibility: 1.0
           }));
-
-          if (handedness === 'Left') {
-            result.leftHand = mappedPoints;
-          } else {
-            result.rightHand = mappedPoints;
-          }
+          const category = handResult.handedness[idx]?.[0]?.categoryName ?? '';
+          const score = handResult.handedness[idx]?.[0]?.score ?? 0;
+          const wristX = mappedPoints[0]?.x ?? 0.5;
+          return { points: mappedPoints, category, score, wristX };
         });
+
+        if (detectedHands.length === 1) {
+          const h = detectedHands[0];
+          // Si MediaPipe clasifica 'Left', es la mano derecha del usuario.
+          // Si la clasificación no es concluyente, corroborar si la muñeca está en la mitad derecha del cuerpo (x < xCenter).
+          const isRight = h.category === 'Left' || (h.category !== 'Right' && h.wristX < xCenter);
+          if (isRight) {
+            result.rightHand = h.points;
+          } else {
+            result.leftHand = h.points;
+          }
+        } else if (detectedHands.length >= 2) {
+          // Desempatar dos manos para evitar colisiones:
+          const candRight = detectedHands.find((h) => h.category === 'Left');
+          const candLeft = detectedHands.find((h) => h.category === 'Right');
+
+          if (candRight && candLeft) {
+            result.rightHand = candRight.points;
+            result.leftHand = candLeft.points;
+          } else {
+            // Si ambas tuvieron la misma etiqueta, ordenar por posición espacial (menor X es lado derecho del usuario)
+            detectedHands.sort((a, b) => a.wristX - b.wristX);
+            result.rightHand = detectedHands[0].points;
+            result.leftHand = detectedHands[1].points;
+          }
+        }
       }
     }
 

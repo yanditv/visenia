@@ -220,57 +220,72 @@ export class VrmAvatarViewer {
   private applyKalidokitRetargeting(landmarks: HolisticFrameLandmarks): void {
     if (!this.currentVrm) return;
 
-    // 1. Pose corporal adaptada para Kalidokit
-    // MediaPipe entrega landmarks desde la perspectiva del sensor.
-    // Para que Kalidokit calcule las rotaciones con la orientación lateral correcta:
-    // Mapeamos los índices laterales (11<->12 hombros, 13<->14 codos, 15<->16 muñecas) e invertimos X.
+    // 1. Pose corporal con Kalidokit (cinemática directa sin distorsión de coordenadas)
     if (landmarks.pose && landmarks.poseWorld && landmarks.pose.length >= 25 && landmarks.poseWorld.length >= 25) {
       try {
-        const pw = landmarks.poseWorld;
-        const p2 = landmarks.pose;
-
-        const adaptedWorld = pw.map((pt, idx) => {
-          let target = pt;
-          if (idx === 11) target = pw[12];
-          else if (idx === 12) target = pw[11];
-          else if (idx === 13) target = pw[14];
-          else if (idx === 14) target = pw[13];
-          else if (idx === 15) target = pw[16];
-          else if (idx === 16) target = pw[15];
-          return { x: -target.x, y: target.y, z: target.z, visibility: target.visibility };
-        });
-
-        const adaptedPose = p2.map((pt, idx) => {
-          let target = pt;
-          if (idx === 11) target = p2[12];
-          else if (idx === 12) target = p2[11];
-          else if (idx === 13) target = p2[14];
-          else if (idx === 14) target = p2[13];
-          else if (idx === 15) target = p2[16];
-          else if (idx === 16) target = p2[15];
-          return { x: 1.0 - target.x, y: target.y, z: target.z, visibility: target.visibility };
-        });
-
         const poseRig = KalidoPose.solve(
-          adaptedWorld as any,
-          adaptedPose as any,
+          landmarks.poseWorld as any,
+          landmarks.pose as any,
           { runtime: 'mediapipe', enableLegs: false }
         );
 
         if (poseRig) {
           this.rigBone(VRMHumanBoneName.Hips, poseRig.Hips?.rotation, 0.7, 0.3);
           this.rigBone(VRMHumanBoneName.Spine, poseRig.Spine as any, 0.5, 0.3);
-          this.rigBone(VRMHumanBoneName.RightUpperArm, poseRig.RightUpperArm, 1.0, 0.6);
-          this.rigBone(VRMHumanBoneName.RightLowerArm, poseRig.RightLowerArm, 1.0, 0.6);
-          this.rigBone(VRMHumanBoneName.LeftUpperArm, poseRig.LeftUpperArm, 1.0, 0.6);
-          this.rigBone(VRMHumanBoneName.LeftLowerArm, poseRig.LeftLowerArm, 1.0, 0.6);
 
-          // Si no hay detección detallada de mano, usar orientación de muñeca de la pose
-          if (!landmarks.rightHand) {
-            this.rigBone(VRMHumanBoneName.RightHand, poseRig.RightHand as any, 1.0, 0.5);
+          // Reflejo especular para Espejo Digital (Digital Mirror):
+          // En el espejo frontal, cuando el usuario mueve su brazo derecho (lado izquierdo de la pantalla),
+          // el avatar mueve su brazo derecho (lado izquierdo de la pantalla frente al usuario).
+          // Kalidokit resuelve el brazo derecho anatómico del usuario en poseRig.LeftUpperArm.
+          // Para asignarlo al RightUpperArm del VRM frontal, invertimos los ejes Y y Z (antagónicos en T-Pose de Three.js VRM).
+          if (poseRig.LeftUpperArm) {
+            this.rigBone(VRMHumanBoneName.RightUpperArm, {
+              x: poseRig.LeftUpperArm.x,
+              y: -poseRig.LeftUpperArm.y,
+              z: -poseRig.LeftUpperArm.z,
+              rotationOrder: (poseRig.LeftUpperArm as any).rotationOrder
+            }, 1.0, 0.6);
           }
-          if (!landmarks.leftHand) {
-            this.rigBone(VRMHumanBoneName.LeftHand, poseRig.LeftHand as any, 1.0, 0.5);
+          if (poseRig.LeftLowerArm) {
+            this.rigBone(VRMHumanBoneName.RightLowerArm, {
+              x: poseRig.LeftLowerArm.x,
+              y: -poseRig.LeftLowerArm.y,
+              z: -poseRig.LeftLowerArm.z,
+              rotationOrder: (poseRig.LeftLowerArm as any).rotationOrder
+            }, 1.0, 0.6);
+          }
+
+          if (poseRig.RightUpperArm) {
+            this.rigBone(VRMHumanBoneName.LeftUpperArm, {
+              x: poseRig.RightUpperArm.x,
+              y: -poseRig.RightUpperArm.y,
+              z: -poseRig.RightUpperArm.z,
+              rotationOrder: (poseRig.RightUpperArm as any).rotationOrder
+            }, 1.0, 0.6);
+          }
+          if (poseRig.RightLowerArm) {
+            this.rigBone(VRMHumanBoneName.LeftLowerArm, {
+              x: poseRig.RightLowerArm.x,
+              y: -poseRig.RightLowerArm.y,
+              z: -poseRig.RightLowerArm.z,
+              rotationOrder: (poseRig.RightLowerArm as any).rotationOrder
+            }, 1.0, 0.6);
+          }
+
+          // Orientación aproximada de muñeca si no hay detección de 21 puntos
+          if (!landmarks.rightHand && poseRig.LeftHand) {
+            this.rigBone(VRMHumanBoneName.RightHand, {
+              x: poseRig.LeftHand.x,
+              y: -poseRig.LeftHand.y,
+              z: -poseRig.LeftHand.z
+            }, 1.0, 0.5);
+          }
+          if (!landmarks.leftHand && poseRig.RightHand) {
+            this.rigBone(VRMHumanBoneName.LeftHand, {
+              x: poseRig.RightHand.x,
+              y: -poseRig.RightHand.y,
+              z: -poseRig.RightHand.z
+            }, 1.0, 0.5);
           }
         }
       } catch (err) {
@@ -283,9 +298,9 @@ export class VrmAvatarViewer {
       try {
         const rightRig = KalidoHand.solve(landmarks.rightHand as any, 'Right');
         if (rightRig) {
-          // Orientación anatómica de muñeca derecha calculada por HandSolver
+          // Orientación anatómica de muñeca derecha calculada por HandSolver (factor suave para estabilidad biomecánica)
           if (rightRig.RightWrist) {
-            this.rigBone(VRMHumanBoneName.RightHand, rightRig.RightWrist, 1.0, 0.6);
+            this.rigBone(VRMHumanBoneName.RightHand, rightRig.RightWrist, 0.7, 0.6);
           }
           for (const mapping of RIGHT_FINGER_MAPPINGS) {
             const rot = (rightRig as any)[mapping.rigKey];
@@ -304,9 +319,9 @@ export class VrmAvatarViewer {
       try {
         const leftRig = KalidoHand.solve(landmarks.leftHand as any, 'Left');
         if (leftRig) {
-          // Orientación anatómica de muñeca izquierda calculada por HandSolver
+          // Orientación anatómica de muñeca izquierda calculada por HandSolver (factor suave para estabilidad biomecánica)
           if (leftRig.LeftWrist) {
-            this.rigBone(VRMHumanBoneName.LeftHand, leftRig.LeftWrist, 1.0, 0.6);
+            this.rigBone(VRMHumanBoneName.LeftHand, leftRig.LeftWrist, 0.7, 0.6);
           }
           for (const mapping of LEFT_FINGER_MAPPINGS) {
             const rot = (leftRig as any)[mapping.rigKey];
