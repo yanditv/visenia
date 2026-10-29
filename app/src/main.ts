@@ -1,10 +1,10 @@
 /**
  * Punto de entrada principal de la PWA Viseña — Espejo Digital + Avatar Guía
- * Sprint 1 (RF-01, RF-02, RF-42)
+ * Sprint 1 (RF-01, RF-02, RF-42, ADR-002)
  *
  * Layout dividido:
  *  - Panel izquierdo: espejo del usuario con inferencia MediaPipe (Pose + Manos + Rostro)
- *  - Panel derecho: avatar VRM guía (visenia.vrm) animado con Three.js
+ *  - Panel derecho: avatar VRM guía (visenia.vrm) con cinemática en tiempo real vía Kalidokit
  */
 import { CameraService } from './camera/camera-service';
 import { SkeletonRenderer, HolisticFrameLandmarks } from './render/skeleton-renderer';
@@ -27,7 +27,7 @@ const cameraService = new CameraService(video);
 const renderer = new SkeletonRenderer(canvas);
 const visionService = new VisionService();
 
-// ─── Avatar VRM ──────────────────────────────────────────────────────────────
+// ─── Avatar VRM (Three.js + Kalidokit) ──────────────────────────────────────
 const avatarViewer = new VrmAvatarViewer({ container: avatarContainer });
 
 // Cargar el modelo VRM de forma asíncrona al iniciar la página
@@ -37,7 +37,7 @@ avatarViewer
     // Ocultar spinner y arrancar bucle de animación Three.js
     avatarLoading.classList.add('oculto');
     avatarViewer.start();
-    console.log('[main] ✓ Avatar VRM listo y animando.');
+    console.log('[main] ✓ Avatar VRM listo y animando con Kalidokit.');
   })
   .catch((err) => {
     console.error('[main] Error al cargar avatar VRM:', err);
@@ -101,8 +101,11 @@ function animationLoop(timestamp: number) {
 
   if (landmarks.pose || landmarks.rightHand || landmarks.leftHand) {
     renderer.render(landmarks);
+    // Transmitir landmarks al avatar para cinemática inversa en tiempo real (Kalidokit)
+    avatarViewer.updatePose(landmarks);
   } else {
     renderer.clear();
+    avatarViewer.updatePose({});
   }
 
   void requestAnimationFrame(animationLoop);
@@ -122,6 +125,7 @@ btnToggleCamera.addEventListener('click', async () => {
       statusDisplay.textContent = 'Cámara detenida';
       statusDisplay.className = 'status-indicator';
       renderer.clear();
+      avatarViewer.updatePose({});
       encuadreBox?.classList.remove('valido');
     } else {
       isSimulating = false;
@@ -175,6 +179,7 @@ btnToggleSynthetic.addEventListener('click', () => {
     statusDisplay.textContent = 'En espera';
     statusDisplay.className = 'status-indicator';
     renderer.clear();
+    avatarViewer.updatePose({});
   }
 });
 

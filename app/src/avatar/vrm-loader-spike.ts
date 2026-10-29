@@ -1,16 +1,20 @@
 /**
- * Carga y control del Avatar VRM con Three.js (RF-42)
+ * Carga y control del Avatar VRM con Three.js y Kalidokit (RF-42, ADR-002)
  *
- * Sprint 1 (PR #11): Integración del modelo real visenia.vrm en la vista dividida.
- * El visor se monta en #avatar-container (panel derecho) y comparte el bucle RAF
- * con el espejo del usuario.
+ * Sprint 1 (PR #12): Spike técnico de animación en tiempo real con Kalidokit.
+ * Mapea:
+ * - Pose superior (torso, hombros, codos, muñecas) desde pose_world + pose 2D
+ * - Dedos (21 landmarks por mano -> 15 articulaciones VRM)
+ * - Blendshapes faciales para expresiones prosoponémicas
+ * - Prioridad para vrm_pose_override (ADR-002)
  *
- * Dependencias: three, @pixiv/three-vrm
- * ADR de referencia: ADR-002 (retargeting VRM)
+ * Dependencias: three, @pixiv/three-vrm, kalidokit
  */
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VRM, VRMLoaderPlugin, VRMUtils, VRMHumanBoneName } from '@pixiv/three-vrm';
+import { Pose as KalidoPose, Hand as KalidoHand } from 'kalidokit';
+import { HolisticFrameLandmarks } from '../render/skeleton-renderer';
 
 /** Ruta pública del modelo VRM del proyecto */
 export const VRM_MODEL_URL = '/models/visenia.vrm';
@@ -19,6 +23,44 @@ export interface VrmAvatarConfig {
   /** Contenedor HTML donde se montará el canvas Three.js */
   container: HTMLElement;
 }
+
+// Mapeo de articulaciones de mano derecha a huesos VRM humanoid
+const RIGHT_FINGER_MAPPINGS: Array<{ vrmBone: VRMHumanBoneName; rigKey: string }> = [
+  { vrmBone: VRMHumanBoneName.RightThumbMetacarpal, rigKey: 'RightThumbProximal' },
+  { vrmBone: VRMHumanBoneName.RightThumbProximal, rigKey: 'RightThumbIntermediate' },
+  { vrmBone: VRMHumanBoneName.RightThumbDistal, rigKey: 'RightThumbDistal' },
+  { vrmBone: VRMHumanBoneName.RightIndexProximal, rigKey: 'RightIndexProximal' },
+  { vrmBone: VRMHumanBoneName.RightIndexIntermediate, rigKey: 'RightIndexIntermediate' },
+  { vrmBone: VRMHumanBoneName.RightIndexDistal, rigKey: 'RightIndexDistal' },
+  { vrmBone: VRMHumanBoneName.RightMiddleProximal, rigKey: 'RightMiddleProximal' },
+  { vrmBone: VRMHumanBoneName.RightMiddleIntermediate, rigKey: 'RightMiddleIntermediate' },
+  { vrmBone: VRMHumanBoneName.RightMiddleDistal, rigKey: 'RightMiddleDistal' },
+  { vrmBone: VRMHumanBoneName.RightRingProximal, rigKey: 'RightRingProximal' },
+  { vrmBone: VRMHumanBoneName.RightRingIntermediate, rigKey: 'RightRingIntermediate' },
+  { vrmBone: VRMHumanBoneName.RightRingDistal, rigKey: 'RightRingDistal' },
+  { vrmBone: VRMHumanBoneName.RightLittleProximal, rigKey: 'RightLittleProximal' },
+  { vrmBone: VRMHumanBoneName.RightLittleIntermediate, rigKey: 'RightLittleIntermediate' },
+  { vrmBone: VRMHumanBoneName.RightLittleDistal, rigKey: 'RightLittleDistal' }
+];
+
+// Mapeo de articulaciones de mano izquierda a huesos VRM humanoid
+const LEFT_FINGER_MAPPINGS: Array<{ vrmBone: VRMHumanBoneName; rigKey: string }> = [
+  { vrmBone: VRMHumanBoneName.LeftThumbMetacarpal, rigKey: 'LeftThumbProximal' },
+  { vrmBone: VRMHumanBoneName.LeftThumbProximal, rigKey: 'LeftThumbIntermediate' },
+  { vrmBone: VRMHumanBoneName.LeftThumbDistal, rigKey: 'LeftThumbDistal' },
+  { vrmBone: VRMHumanBoneName.LeftIndexProximal, rigKey: 'LeftIndexProximal' },
+  { vrmBone: VRMHumanBoneName.LeftIndexIntermediate, rigKey: 'LeftIndexIntermediate' },
+  { vrmBone: VRMHumanBoneName.LeftIndexDistal, rigKey: 'LeftIndexDistal' },
+  { vrmBone: VRMHumanBoneName.LeftMiddleProximal, rigKey: 'LeftMiddleProximal' },
+  { vrmBone: VRMHumanBoneName.LeftMiddleIntermediate, rigKey: 'LeftMiddleIntermediate' },
+  { vrmBone: VRMHumanBoneName.LeftMiddleDistal, rigKey: 'LeftMiddleDistal' },
+  { vrmBone: VRMHumanBoneName.LeftRingProximal, rigKey: 'LeftRingProximal' },
+  { vrmBone: VRMHumanBoneName.LeftRingIntermediate, rigKey: 'LeftRingIntermediate' },
+  { vrmBone: VRMHumanBoneName.LeftRingDistal, rigKey: 'LeftRingDistal' },
+  { vrmBone: VRMHumanBoneName.LeftLittleProximal, rigKey: 'LeftLittleProximal' },
+  { vrmBone: VRMHumanBoneName.LeftLittleIntermediate, rigKey: 'LeftLittleIntermediate' },
+  { vrmBone: VRMHumanBoneName.LeftLittleDistal, rigKey: 'LeftLittleDistal' }
+];
 
 export class VrmAvatarViewer {
   private scene: THREE.Scene;
@@ -29,6 +71,9 @@ export class VrmAvatarViewer {
   private isAnimating: boolean = false;
   private container: HTMLElement;
   private resizeObserver: ResizeObserver;
+
+  // Estado dinámico de landmarks recibidos
+  private latestLandmarks: HolisticFrameLandmarks | null = null;
 
   constructor(config: VrmAvatarConfig) {
     this.container = config.container;
@@ -52,14 +97,14 @@ export class VrmAvatarViewer {
     this.container.appendChild(this.renderer.domElement);
 
     // 4. Iluminación para resaltar manos y rostro del avatar
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.1);
     this.scene.add(ambientLight);
 
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.8);
     keyLight.position.set(1.0, 2.5, 2.0).normalize();
     this.scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.6);
+    const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.7);
     fillLight.position.set(-1.5, 1.0, 1.0).normalize();
     this.scene.add(fillLight);
 
@@ -77,7 +122,7 @@ export class VrmAvatarViewer {
 
   /**
    * Carga el modelo VRM desde la URL pública.
-   * Retorna la instancia VRM para permitir retargeting externo (Kalidokit).
+   * Retorna la instancia VRM para permitir retargeting externo.
    */
   public async loadModel(url: string = VRM_MODEL_URL): Promise<VRM> {
     const loader = new GLTFLoader();
@@ -93,14 +138,11 @@ export class VrmAvatarViewer {
             return;
           }
 
-          // Limpieza de vértices y joints innecesarios (optimización VRoid)
+          // Limpieza de mallas y orientación
           VRMUtils.removeUnnecessaryVertices(gltf.scene);
           VRMUtils.removeUnnecessaryJoints(gltf.scene);
-
-          // Orientar avatar hacia la cámara
           vrm.scene.rotation.y = Math.PI;
 
-          // Reemplazar modelo anterior si existía
           if (this.currentVrm) {
             this.scene.remove(this.currentVrm.scene);
             VRMUtils.deepDispose(this.currentVrm.scene);
@@ -127,9 +169,14 @@ export class VrmAvatarViewer {
   }
 
   /**
+   * Actualiza los landmarks activos para retargeting en el siguiente frame.
+   */
+  public updatePose(landmarks: HolisticFrameLandmarks): void {
+    this.latestLandmarks = landmarks;
+  }
+
+  /**
    * Inicia el bucle de renderizado Three.js.
-   * En Sprint 1 anima una pose de descanso neutral.
-   * En Sprint 2 (Kalidokit) este método recibirá los datos de pose en vivo.
    */
   public start(): void {
     if (this.isAnimating) return;
@@ -143,24 +190,21 @@ export class VrmAvatarViewer {
       const elapsed = this.clock.getElapsedTime();
 
       if (this.currentVrm) {
-        // Pose de descanso: respiración sutil en el cuello
-        const neck = this.currentVrm.humanoid.getNormalizedBoneNode(VRMHumanBoneName.Neck);
-        if (neck) {
-          neck.rotation.x = Math.sin(elapsed * 0.8) * 0.02;
+        const hasLiveInput = this.latestLandmarks && (
+          (this.latestLandmarks.pose && this.latestLandmarks.pose.length > 0) ||
+          (this.latestLandmarks.rightHand && this.latestLandmarks.rightHand.length === 21) ||
+          (this.latestLandmarks.leftHand && this.latestLandmarks.leftHand.length === 21)
+        );
+
+        if (hasLiveInput && this.latestLandmarks) {
+          // ─── Cinemática activa con Kalidokit ─────────────────────────────
+          this.applyKalidokitRetargeting(this.latestLandmarks);
+        } else {
+          // ─── Pose de descanso neutral cuando no hay detección ───────────
+          this.applyRestingPose(elapsed);
         }
 
-        // Brazos en posición relajada a los costados
-        const rightUpperArm = this.currentVrm.humanoid.getNormalizedBoneNode(VRMHumanBoneName.RightUpperArm);
-        if (rightUpperArm) {
-          rightUpperArm.rotation.z = -0.15 + Math.sin(elapsed * 0.6) * 0.02;
-        }
-
-        const leftUpperArm = this.currentVrm.humanoid.getNormalizedBoneNode(VRMHumanBoneName.LeftUpperArm);
-        if (leftUpperArm) {
-          leftUpperArm.rotation.z = 0.15 + Math.sin(elapsed * 0.6) * 0.02;
-        }
-
-        // Actualizar cinemática interna del VRM (blendshapes, springs, etc.)
+        // Actualizar cinemática interna del VRM (expresiones, springs de pelo/ropa)
         this.currentVrm.update(delta);
       }
 
@@ -170,11 +214,150 @@ export class VrmAvatarViewer {
     animate();
   }
 
+  /**
+   * Aplica cinemática inversa con Kalidokit desde landmarks del usuario.
+   */
+  private applyKalidokitRetargeting(landmarks: HolisticFrameLandmarks): void {
+    if (!this.currentVrm) return;
+
+    // 1. Pose corporal (brazos, torso)
+    if (landmarks.pose && landmarks.poseWorld && landmarks.pose.length >= 25 && landmarks.poseWorld.length >= 25) {
+      try {
+        const poseRig = KalidoPose.solve(
+          landmarks.poseWorld as any,
+          landmarks.pose as any,
+          { runtime: 'mediapipe', enableLegs: false }
+        );
+
+        if (poseRig) {
+          this.rigBone(VRMHumanBoneName.Hips, poseRig.Hips?.rotation, 0.7, 0.3);
+          this.rigBone(VRMHumanBoneName.Spine, poseRig.Spine as any, 0.5, 0.3);
+          this.rigBone(VRMHumanBoneName.RightUpperArm, poseRig.RightUpperArm, 1.0, 0.5);
+          this.rigBone(VRMHumanBoneName.RightLowerArm, poseRig.RightLowerArm, 1.0, 0.5);
+          this.rigBone(VRMHumanBoneName.LeftUpperArm, poseRig.LeftUpperArm, 1.0, 0.5);
+          this.rigBone(VRMHumanBoneName.LeftLowerArm, poseRig.LeftLowerArm, 1.0, 0.5);
+          this.rigBone(VRMHumanBoneName.RightHand, poseRig.RightHand as any, 1.0, 0.5);
+          this.rigBone(VRMHumanBoneName.LeftHand, poseRig.LeftHand as any, 1.0, 0.5);
+        }
+      } catch (err) {
+        console.warn('[VrmAvatarViewer] Error al resolver Pose con Kalidokit:', err);
+      }
+    }
+
+    // 2. Dedos mano derecha (21 puntos)
+    if (landmarks.rightHand && landmarks.rightHand.length === 21) {
+      try {
+        const rightRig = KalidoHand.solve(landmarks.rightHand as any, 'Right');
+        if (rightRig) {
+          for (const mapping of RIGHT_FINGER_MAPPINGS) {
+            const rot = (rightRig as any)[mapping.rigKey];
+            if (rot) {
+              this.rigBone(mapping.vrmBone, rot, 1.0, 0.6);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[VrmAvatarViewer] Error al resolver Mano Derecha con Kalidokit:', err);
+      }
+    }
+
+    // 3. Dedos mano izquierda (21 puntos)
+    if (landmarks.leftHand && landmarks.leftHand.length === 21) {
+      try {
+        const leftRig = KalidoHand.solve(landmarks.leftHand as any, 'Left');
+        if (leftRig) {
+          for (const mapping of LEFT_FINGER_MAPPINGS) {
+            const rot = (leftRig as any)[mapping.rigKey];
+            if (rot) {
+              this.rigBone(mapping.vrmBone, rot, 1.0, 0.6);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[VrmAvatarViewer] Error al resolver Mano Izquierda con Kalidokit:', err);
+      }
+    }
+
+    // 4. Expresiones faciales y Blendshapes (Prosoponema)
+    if (landmarks.blendshapes && this.currentVrm.expressionManager) {
+      const bs = landmarks.blendshapes;
+      if (bs['eyeBlinkLeft'] !== undefined) {
+        this.currentVrm.expressionManager.setValue('blinkLeft', bs['eyeBlinkLeft']);
+      }
+      if (bs['eyeBlinkRight'] !== undefined) {
+        this.currentVrm.expressionManager.setValue('blinkRight', bs['eyeBlinkRight']);
+      }
+      if (bs['jawOpen'] !== undefined) {
+        this.currentVrm.expressionManager.setValue('aa', Math.min(1.0, bs['jawOpen'] * 1.4));
+      }
+      if (bs['mouthSmileLeft'] !== undefined || bs['mouthSmileRight'] !== undefined) {
+        const smile = ((bs['mouthSmileLeft'] ?? 0) + (bs['mouthSmileRight'] ?? 0)) / 2;
+        this.currentVrm.expressionManager.setValue('happy', smile);
+      }
+    }
+
+    // 5. Prioridad absoluta: vrm_pose_override (ADR-002)
+    if (landmarks.vrmPoseOverride) {
+      for (const [boneName, quatArr] of Object.entries(landmarks.vrmPoseOverride)) {
+        const boneNode = this.currentVrm.humanoid.getNormalizedBoneNode(boneName as VRMHumanBoneName);
+        if (boneNode && quatArr.length === 4) {
+          const overrideQuat = new THREE.Quaternion(quatArr[0], quatArr[1], quatArr[2], quatArr[3]);
+          boneNode.quaternion.slerp(overrideQuat, 0.8);
+        }
+      }
+    }
+  }
+
+  /**
+   * Aplica pose de descanso con respiración sutil cuando no hay tracking.
+   */
+  private applyRestingPose(elapsed: number): void {
+    if (!this.currentVrm) return;
+
+    const neck = this.currentVrm.humanoid.getNormalizedBoneNode(VRMHumanBoneName.Neck);
+    if (neck) {
+      neck.rotation.x = Math.sin(elapsed * 0.8) * 0.02;
+    }
+
+    const rightUpperArm = this.currentVrm.humanoid.getNormalizedBoneNode(VRMHumanBoneName.RightUpperArm);
+    if (rightUpperArm) {
+      rightUpperArm.rotation.z = -0.15 + Math.sin(elapsed * 0.6) * 0.02;
+    }
+
+    const leftUpperArm = this.currentVrm.humanoid.getNormalizedBoneNode(VRMHumanBoneName.LeftUpperArm);
+    if (leftUpperArm) {
+      leftUpperArm.rotation.z = 0.15 + Math.sin(elapsed * 0.6) * 0.02;
+    }
+  }
+
+  /**
+   * Helper para aplicar rotación a un hueso VRM usando slerp para suavizado.
+   */
+  private rigBone(
+    boneName: VRMHumanBoneName,
+    rotation?: { x: number; y: number; z: number; rotationOrder?: string },
+    dampFactor: number = 1.0,
+    lerpAmount: number = 0.4
+  ): void {
+    if (!this.currentVrm || !rotation) return;
+    const boneNode = this.currentVrm.humanoid.getNormalizedBoneNode(boneName);
+    if (!boneNode) return;
+
+    const euler = new THREE.Euler(
+      rotation.x * dampFactor,
+      rotation.y * dampFactor,
+      rotation.z * dampFactor,
+      (rotation.rotationOrder as any) || 'XYZ'
+    );
+    const targetQuat = new THREE.Quaternion().setFromEuler(euler);
+    boneNode.quaternion.slerp(targetQuat, lerpAmount);
+  }
+
   public stop(): void {
     this.isAnimating = false;
   }
 
-  /** Expone el VRM actual para retargeting externo (Kalidokit — PR #12) */
+  /** Expone el VRM actual para inspección o utilidades */
   public getVrm(): VRM | null {
     return this.currentVrm;
   }
