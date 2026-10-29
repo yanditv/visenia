@@ -19,7 +19,6 @@ const renderer = new SkeletonRenderer(canvas);
 const visionService = new VisionService();
 
 let isSimulating = false;
-let animationFrameId: number | null = null;
 let lastTimestamp = performance.now();
 let frameCount = 0;
 let currentFps = 0;
@@ -79,11 +78,11 @@ function animationLoop(timestamp: number) {
     renderer.clear();
   }
 
-  animationFrameId = requestAnimationFrame(animationLoop);
+  void requestAnimationFrame(animationLoop);
 }
 
 // Iniciar bucle
-animationFrameId = requestAnimationFrame(animationLoop);
+void requestAnimationFrame(animationLoop);
 
 // Control de cámara
 btnToggleCamera.addEventListener('click', async () => {
