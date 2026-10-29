@@ -55,6 +55,10 @@
               <option value="">Cargando catálogo...</option>
             </select>
           </div>
+          <div class="avatar-mode-segmented" role="tablist" aria-label="Modo de visualización del avatar">
+            <button id="btn-mode-guia" class="mode-btn active" title="Reproduce la seña canónica del catálogo de referencia (RF-07, RF-08)">📖 Modo Guía</button>
+            <button id="btn-mode-espejo" class="mode-btn" title="El avatar refleja tu movimiento en tiempo real 3D (RF-42)">🪞 Reflejo en Vivo</button>
+          </div>
           <div id="fonologia-badge" class="fonologia-badge">
             <span id="fonologia-info">Toponema: -- • Mov: --</span>
           </div>
@@ -63,6 +67,10 @@
         <div id="avatar-container" class="avatar-wrapper">
           <div id="avatar-loading" class="avatar-loading">
             <span class="avatar-loading-text">Cargando avatar…</span>
+          </div>
+          <canvas id="avatar-hand-canvas" class="avatar-hand-overlay"></canvas>
+          <div id="avatar-hand-badge" class="avatar-hand-badge">
+            <span id="lbl-hand-shape">Forma: mano_abierta</span>
           </div>
         </div>
 

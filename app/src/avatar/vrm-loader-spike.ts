@@ -13,8 +13,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VRM, VRMLoaderPlugin, VRMUtils, VRMHumanBoneName } from '@pixiv/three-vrm';
-import { Pose as KalidoPose, Hand as KalidoHand } from 'kalidokit';
-import { HolisticFrameLandmarks } from '../render/skeleton-renderer';
+import { HolisticFrameLandmarks, LandmarkPoint } from '../render/skeleton-renderer';
 
 /** Ruta pública del modelo VRM del proyecto */
 export const VRM_MODEL_URL = '/models/visenia.vrm';
@@ -23,44 +22,6 @@ export interface VrmAvatarConfig {
   /** Contenedor HTML donde se montará el canvas Three.js */
   container: HTMLElement;
 }
-
-// Mapeo de articulaciones de mano derecha a huesos VRM humanoid
-const RIGHT_FINGER_MAPPINGS: Array<{ vrmBone: VRMHumanBoneName; rigKey: string }> = [
-  { vrmBone: VRMHumanBoneName.RightThumbMetacarpal, rigKey: 'RightThumbProximal' },
-  { vrmBone: VRMHumanBoneName.RightThumbProximal, rigKey: 'RightThumbIntermediate' },
-  { vrmBone: VRMHumanBoneName.RightThumbDistal, rigKey: 'RightThumbDistal' },
-  { vrmBone: VRMHumanBoneName.RightIndexProximal, rigKey: 'RightIndexProximal' },
-  { vrmBone: VRMHumanBoneName.RightIndexIntermediate, rigKey: 'RightIndexIntermediate' },
-  { vrmBone: VRMHumanBoneName.RightIndexDistal, rigKey: 'RightIndexDistal' },
-  { vrmBone: VRMHumanBoneName.RightMiddleProximal, rigKey: 'RightMiddleProximal' },
-  { vrmBone: VRMHumanBoneName.RightMiddleIntermediate, rigKey: 'RightMiddleIntermediate' },
-  { vrmBone: VRMHumanBoneName.RightMiddleDistal, rigKey: 'RightMiddleDistal' },
-  { vrmBone: VRMHumanBoneName.RightRingProximal, rigKey: 'RightRingProximal' },
-  { vrmBone: VRMHumanBoneName.RightRingIntermediate, rigKey: 'RightRingIntermediate' },
-  { vrmBone: VRMHumanBoneName.RightRingDistal, rigKey: 'RightRingDistal' },
-  { vrmBone: VRMHumanBoneName.RightLittleProximal, rigKey: 'RightLittleProximal' },
-  { vrmBone: VRMHumanBoneName.RightLittleIntermediate, rigKey: 'RightLittleIntermediate' },
-  { vrmBone: VRMHumanBoneName.RightLittleDistal, rigKey: 'RightLittleDistal' }
-];
-
-// Mapeo de articulaciones de mano izquierda a huesos VRM humanoid
-const LEFT_FINGER_MAPPINGS: Array<{ vrmBone: VRMHumanBoneName; rigKey: string }> = [
-  { vrmBone: VRMHumanBoneName.LeftThumbMetacarpal, rigKey: 'LeftThumbProximal' },
-  { vrmBone: VRMHumanBoneName.LeftThumbProximal, rigKey: 'LeftThumbIntermediate' },
-  { vrmBone: VRMHumanBoneName.LeftThumbDistal, rigKey: 'LeftThumbDistal' },
-  { vrmBone: VRMHumanBoneName.LeftIndexProximal, rigKey: 'LeftIndexProximal' },
-  { vrmBone: VRMHumanBoneName.LeftIndexIntermediate, rigKey: 'LeftIndexIntermediate' },
-  { vrmBone: VRMHumanBoneName.LeftIndexDistal, rigKey: 'LeftIndexDistal' },
-  { vrmBone: VRMHumanBoneName.LeftMiddleProximal, rigKey: 'LeftMiddleProximal' },
-  { vrmBone: VRMHumanBoneName.LeftMiddleIntermediate, rigKey: 'LeftMiddleIntermediate' },
-  { vrmBone: VRMHumanBoneName.LeftMiddleDistal, rigKey: 'LeftMiddleDistal' },
-  { vrmBone: VRMHumanBoneName.LeftRingProximal, rigKey: 'LeftRingProximal' },
-  { vrmBone: VRMHumanBoneName.LeftRingIntermediate, rigKey: 'LeftRingIntermediate' },
-  { vrmBone: VRMHumanBoneName.LeftRingDistal, rigKey: 'LeftRingDistal' },
-  { vrmBone: VRMHumanBoneName.LeftLittleProximal, rigKey: 'LeftLittleProximal' },
-  { vrmBone: VRMHumanBoneName.LeftLittleIntermediate, rigKey: 'LeftLittleIntermediate' },
-  { vrmBone: VRMHumanBoneName.LeftLittleDistal, rigKey: 'LeftLittleDistal' }
-];
 
 export class VrmAvatarViewer {
   private scene: THREE.Scene;
@@ -197,8 +158,7 @@ export class VrmAvatarViewer {
         );
 
         if (hasLiveInput && this.latestLandmarks) {
-          // Cinemática activa con Kalidokit
-          this.applyKalidokitRetargeting(this.latestLandmarks);
+          this.applyDirectMirrorKinematics(this.latestLandmarks);
         } else {
           // Pose de descanso neutral cuando no hay detección
           this.applyRestingPose(elapsed);
@@ -215,127 +175,102 @@ export class VrmAvatarViewer {
   }
 
   /**
-   * Aplica cinemática inversa con Kalidokit desde landmarks del usuario.
+   * Aplica cinemática directa con reflejo especular en tiempo real.
+   * Resuelve:
+   * 1. Inversión de eje Y: en MediaPipe Y aumenta hacia abajo; aquí se invierte (-dy) para que el avatar siga la dirección física real.
+   * 2. Lateralidad visual coherente: el brazo en el panel izquierdo de la cámara mueve el brazo en el lado izquierdo del avatar.
+   * 3. Prevención de extremidades congeladas: se emplean los 33 landmarks de Pose como base continua; si un brazo o mano sale de cuadro,
+   *    slerp interpola suavemente a la postura de descanso en vez de trabarse.
+   * 4. Configuración manual articulada (Queirema): se computa el grado de extensión/curvatura (curl) de cada uno de los 5 dedos y la normal de la palma.
    */
-  private applyKalidokitRetargeting(landmarks: HolisticFrameLandmarks): void {
+  private applyDirectMirrorKinematics(landmarks: HolisticFrameLandmarks): void {
     if (!this.currentVrm) return;
 
-    // 1. Pose corporal con Kalidokit (cinemática directa sin distorsión de coordenadas)
-    if (landmarks.pose && landmarks.poseWorld && landmarks.pose.length >= 25 && landmarks.poseWorld.length >= 25) {
-      try {
-        const poseRig = KalidoPose.solve(
-          landmarks.poseWorld as any,
-          landmarks.pose as any,
-          { runtime: 'mediapipe', enableLegs: false }
-        );
+    const pose = landmarks.pose;
+    const rightArmRestQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -1.32));
+    const leftArmRestQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, 1.32));
+    const identQuat = new THREE.Quaternion();
 
-        if (poseRig) {
-          this.rigBone(VRMHumanBoneName.Hips, poseRig.Hips?.rotation, 0.7, 0.3);
-          this.rigBone(VRMHumanBoneName.Spine, poseRig.Spine as any, 0.5, 0.3);
+    // ─── 1. Brazo ubicado a la izquierda de la pantalla (RightUpperArm/RightLowerArm del VRM) ───
+    // En cámara frontal con espejo, este corresponde a la mitad x < 0.5 (pose[12] hombro der, pose[14] codo der)
+    if (pose && pose[12] && pose[14] && (pose[12].visibility ?? 1.0) > 0.25 && (pose[14].visibility ?? 1.0) > 0.25) {
+      // Inversión explícita del eje Y: en canvas Y crece hacia abajo; en Three.js Y positivo es arriba
+      const udx = pose[14].x - pose[12].x;
+      const udy = -(pose[14].y - pose[12].y);
+      const udz = -((pose[14].z ?? 0) - (pose[12].z ?? 0));
+      const vUpper = new THREE.Vector3(udx, udy, udz).normalize();
 
-          // Reflejo especular para Espejo Digital (Digital Mirror):
-          // En el espejo frontal, cuando el usuario mueve su brazo derecho (lado izquierdo de la pantalla),
-          // el avatar mueve su brazo derecho (lado izquierdo de la pantalla frente al usuario).
-          // Kalidokit resuelve el brazo derecho anatómico del usuario en poseRig.LeftUpperArm.
-          // Para asignarlo al RightUpperArm del VRM frontal, invertimos los ejes Y y Z (antagónicos en T-Pose de Three.js VRM).
-          if (poseRig.LeftUpperArm) {
-            this.rigBone(VRMHumanBoneName.RightUpperArm, {
-              x: poseRig.LeftUpperArm.x,
-              y: -poseRig.LeftUpperArm.y,
-              z: -poseRig.LeftUpperArm.z,
-              rotationOrder: (poseRig.LeftUpperArm as any).rotationOrder
-            }, 1.0, 0.6);
-          }
-          if (poseRig.LeftLowerArm) {
-            this.rigBone(VRMHumanBoneName.RightLowerArm, {
-              x: poseRig.LeftLowerArm.x,
-              y: -poseRig.LeftLowerArm.y,
-              z: -poseRig.LeftLowerArm.z,
-              rotationOrder: (poseRig.LeftLowerArm as any).rotationOrder
-            }, 1.0, 0.6);
-          }
+      // RightUpperArm en VRM T-Pose apunta hacia (-1, 0, 0)
+      const qUpper = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(-1, 0, 0), vUpper);
+      this.rigBoneQuat(VRMHumanBoneName.RightUpperArm, qUpper, 0.45);
 
-          if (poseRig.RightUpperArm) {
-            this.rigBone(VRMHumanBoneName.LeftUpperArm, {
-              x: poseRig.RightUpperArm.x,
-              y: -poseRig.RightUpperArm.y,
-              z: -poseRig.RightUpperArm.z,
-              rotationOrder: (poseRig.RightUpperArm as any).rotationOrder
-            }, 1.0, 0.6);
-          }
-          if (poseRig.RightLowerArm) {
-            this.rigBone(VRMHumanBoneName.LeftLowerArm, {
-              x: poseRig.RightLowerArm.x,
-              y: -poseRig.RightLowerArm.y,
-              z: -poseRig.RightLowerArm.z,
-              rotationOrder: (poseRig.RightLowerArm as any).rotationOrder
-            }, 1.0, 0.6);
-          }
+      // Antebrazo (codo a muñeca)
+      const wrist = (landmarks.rightHand && landmarks.rightHand[0]) ? landmarks.rightHand[0] : pose[16];
+      if (wrist && (wrist.visibility ?? 1.0) > 0.25) {
+        const fdx = wrist.x - pose[14].x;
+        const fdy = -(wrist.y - pose[14].y); // Inversión de Y en antebrazo
+        const fdz = -((wrist.z ?? 0) - (pose[14].z ?? 0));
+        const vForearm = new THREE.Vector3(fdx, fdy, fdz).normalize();
 
-          // Orientación aproximada de muñeca si no hay detección de 21 puntos
-          if (!landmarks.rightHand && poseRig.LeftHand) {
-            this.rigBone(VRMHumanBoneName.RightHand, {
-              x: poseRig.LeftHand.x,
-              y: -poseRig.LeftHand.y,
-              z: -poseRig.LeftHand.z
-            }, 1.0, 0.5);
-          }
-          if (!landmarks.leftHand && poseRig.RightHand) {
-            this.rigBone(VRMHumanBoneName.LeftHand, {
-              x: poseRig.RightHand.x,
-              y: -poseRig.RightHand.y,
-              z: -poseRig.RightHand.z
-            }, 1.0, 0.5);
-          }
-        }
-      } catch (err) {
-        console.warn('[VrmAvatarViewer] Error al resolver Pose con Kalidokit:', err);
+        const vLocal = vForearm.clone().applyQuaternion(qUpper.clone().invert());
+        const qLower = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(-1, 0, 0), vLocal);
+        this.rigBoneQuat(VRMHumanBoneName.RightLowerArm, qLower, 0.5);
+      } else {
+        this.rigBoneQuat(VRMHumanBoneName.RightLowerArm, identQuat, 0.25);
       }
+    } else {
+      // Si el brazo sale de la cámara, interpolación suave a reposo (no se congela en el aire)
+      this.rigBoneQuat(VRMHumanBoneName.RightUpperArm, rightArmRestQuat, 0.2);
+      this.rigBoneQuat(VRMHumanBoneName.RightLowerArm, identQuat, 0.25);
     }
 
-    // 2. Dedos y muñeca mano derecha (21 puntos)
+    // ─── 2. Brazo ubicado a la derecha de la pantalla (LeftUpperArm/LeftLowerArm del VRM) ───
+    // En cámara frontal con espejo, este corresponde a la mitad x > 0.5 (pose[11] hombro izq, pose[13] codo izq)
+    if (pose && pose[11] && pose[13] && (pose[11].visibility ?? 1.0) > 0.25 && (pose[13].visibility ?? 1.0) > 0.25) {
+      const udx = pose[13].x - pose[11].x;
+      const udy = -(pose[13].y - pose[11].y);
+      const udz = -((pose[13].z ?? 0) - (pose[11].z ?? 0));
+      const vUpper = new THREE.Vector3(udx, udy, udz).normalize();
+
+      // LeftUpperArm en VRM T-Pose apunta hacia (1, 0, 0)
+      const qUpper = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), vUpper);
+      this.rigBoneQuat(VRMHumanBoneName.LeftUpperArm, qUpper, 0.45);
+
+      // Antebrazo
+      const wrist = (landmarks.leftHand && landmarks.leftHand[0]) ? landmarks.leftHand[0] : pose[15];
+      if (wrist && (wrist.visibility ?? 1.0) > 0.25) {
+        const fdx = wrist.x - pose[13].x;
+        const fdy = -(wrist.y - pose[13].y);
+        const fdz = -((wrist.z ?? 0) - (pose[13].z ?? 0));
+        const vForearm = new THREE.Vector3(fdx, fdy, fdz).normalize();
+
+        const vLocal = vForearm.clone().applyQuaternion(qUpper.clone().invert());
+        const qLower = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), vLocal);
+        this.rigBoneQuat(VRMHumanBoneName.LeftLowerArm, qLower, 0.5);
+      } else {
+        this.rigBoneQuat(VRMHumanBoneName.LeftLowerArm, identQuat, 0.25);
+      }
+    } else {
+      // Reposo suave si sale del encuadre
+      this.rigBoneQuat(VRMHumanBoneName.LeftUpperArm, leftArmRestQuat, 0.2);
+      this.rigBoneQuat(VRMHumanBoneName.LeftLowerArm, identQuat, 0.25);
+    }
+
+    // ─── 3. Articulación fonológica de mano derecha (21 puntos) ───
     if (landmarks.rightHand && landmarks.rightHand.length === 21) {
-      try {
-        const rightRig = KalidoHand.solve(landmarks.rightHand as any, 'Right');
-        if (rightRig) {
-          // Orientación anatómica de muñeca derecha calculada por HandSolver (factor suave para estabilidad biomecánica)
-          if (rightRig.RightWrist) {
-            this.rigBone(VRMHumanBoneName.RightHand, rightRig.RightWrist, 0.7, 0.6);
-          }
-          for (const mapping of RIGHT_FINGER_MAPPINGS) {
-            const rot = (rightRig as any)[mapping.rigKey];
-            if (rot) {
-              this.rigBone(mapping.vrmBone, rot, 1.0, 0.6);
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('[VrmAvatarViewer] Error al resolver Mano Derecha con Kalidokit:', err);
-      }
+      this.applyFingerArticulations(landmarks.rightHand, 'right');
+    } else {
+      this.relaxFingers('right');
     }
 
-    // 3. Dedos y muñeca mano izquierda (21 puntos)
+    // ─── 4. Articulación fonológica de mano izquierda (21 puntos) ───
     if (landmarks.leftHand && landmarks.leftHand.length === 21) {
-      try {
-        const leftRig = KalidoHand.solve(landmarks.leftHand as any, 'Left');
-        if (leftRig) {
-          // Orientación anatómica de muñeca izquierda calculada por HandSolver (factor suave para estabilidad biomecánica)
-          if (leftRig.LeftWrist) {
-            this.rigBone(VRMHumanBoneName.LeftHand, leftRig.LeftWrist, 0.7, 0.6);
-          }
-          for (const mapping of LEFT_FINGER_MAPPINGS) {
-            const rot = (leftRig as any)[mapping.rigKey];
-            if (rot) {
-              this.rigBone(mapping.vrmBone, rot, 1.0, 0.6);
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('[VrmAvatarViewer] Error al resolver Mano Izquierda con Kalidokit:', err);
-      }
+      this.applyFingerArticulations(landmarks.leftHand, 'left');
+    } else {
+      this.relaxFingers('left');
     }
 
-    // 4. Expresiones faciales y Blendshapes (Prosoponema)
+    // ─── 5. Expresiones faciales y Blendshapes (Prosoponema) ───
     if (landmarks.blendshapes && this.currentVrm.expressionManager) {
       const bs = landmarks.blendshapes;
       if (bs['eyeBlinkLeft'] !== undefined) {
@@ -353,7 +288,7 @@ export class VrmAvatarViewer {
       }
     }
 
-    // 5. Prioridad absoluta: vrm_pose_override (ADR-002)
+    // ─── 6. Prioridad absoluta: vrm_pose_override (ADR-002) ───
     if (landmarks.vrmPoseOverride) {
       for (const [boneName, quatArr] of Object.entries(landmarks.vrmPoseOverride)) {
         const boneNode = this.currentVrm.humanoid.getNormalizedBoneNode(boneName as VRMHumanBoneName);
@@ -363,6 +298,118 @@ export class VrmAvatarViewer {
         }
       }
     }
+  }
+
+  /**
+   * Articula los 5 dedos y muñeca a partir de los 21 puntos anatómicos.
+   * Calcula el ratio de flexión (curl) de cada falange para distinguir Mano Abierta vs Puño vs Pinzas.
+   */
+  private applyFingerArticulations(hand: LandmarkPoint[], side: 'right' | 'left'): void {
+    if (!this.currentVrm) return;
+    const sign = side === 'right' ? 1 : -1;
+    const wristNode = this.currentVrm.humanoid.getNormalizedBoneNode(
+      side === 'right' ? VRMHumanBoneName.RightHand : VRMHumanBoneName.LeftHand
+    );
+
+    // Orientación de la palma y muñeca
+    if (wristNode && hand[0] && hand[9] && hand[5] && hand[17]) {
+      const hdx = hand[9].x - hand[0].x;
+      const hdy = -(hand[9].y - hand[0].y); // Inversión Y
+      const hdz = -((hand[9].z ?? 0) - (hand[0].z ?? 0));
+      const handHeading = new THREE.Vector3(hdx, hdy, hdz).normalize();
+
+      const vIndex = new THREE.Vector3(hand[5].x - hand[0].x, -(hand[5].y - hand[0].y), 0);
+      const vPinky = new THREE.Vector3(hand[17].x - hand[0].x, -(hand[17].y - hand[0].y), 0);
+      const palmNormal = new THREE.Vector3().crossVectors(vIndex, vPinky).normalize();
+
+      const wristAngleZ = Math.atan2(handHeading.y, Math.abs(handHeading.x) + 1e-4) * 0.5 * sign;
+      const wristAngleY = -palmNormal.z * 0.4 * sign;
+      const qWrist = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, wristAngleY, wristAngleZ));
+      wristNode.quaternion.slerp(qWrist, 0.35);
+    }
+
+    // Curvatura de dedos (0.0 = Mano Abierta / extendido, 1.0 = Puño / flexionado)
+    const computeCurl = (tipIdx: number, mcpIdx: number): number => {
+      const dTip = Math.hypot(hand[tipIdx].x - hand[0].x, hand[tipIdx].y - hand[0].y);
+      const dMcp = Math.hypot(hand[mcpIdx].x - hand[0].x, hand[mcpIdx].y - hand[0].y);
+      const ratio = dTip / (dMcp + 1e-4);
+      return Math.min(1.0, Math.max(0.0, (1.7 - ratio) / (1.7 - 0.95)));
+    };
+
+    const curlThumb = computeCurl(4, 2);
+    const curlIndex = computeCurl(8, 5);
+    const curlMiddle = computeCurl(12, 9);
+    const curlRing = computeCurl(16, 13);
+    const curlLittle = computeCurl(20, 17);
+
+    const applyDigitBones = (
+      proximalName: VRMHumanBoneName,
+      interName: VRMHumanBoneName,
+      distalName: VRMHumanBoneName,
+      curlVal: number
+    ) => {
+      const angle = curlVal * 0.85 * sign;
+      const qFinger = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, angle));
+      this.rigBoneQuat(proximalName, qFinger, 0.4);
+      this.rigBoneQuat(interName, qFinger, 0.4);
+      this.rigBoneQuat(distalName, qFinger, 0.4);
+    };
+
+    if (side === 'right') {
+      const qThumb = new THREE.Quaternion().setFromEuler(new THREE.Euler(curlThumb * 0.3, 0, curlThumb * 0.5));
+      this.rigBoneQuat(VRMHumanBoneName.RightThumbProximal, qThumb, 0.4);
+      this.rigBoneQuat(VRMHumanBoneName.RightThumbDistal, qThumb, 0.4);
+
+      applyDigitBones(VRMHumanBoneName.RightIndexProximal, VRMHumanBoneName.RightIndexIntermediate, VRMHumanBoneName.RightIndexDistal, curlIndex);
+      applyDigitBones(VRMHumanBoneName.RightMiddleProximal, VRMHumanBoneName.RightMiddleIntermediate, VRMHumanBoneName.RightMiddleDistal, curlMiddle);
+      applyDigitBones(VRMHumanBoneName.RightRingProximal, VRMHumanBoneName.RightRingIntermediate, VRMHumanBoneName.RightRingDistal, curlRing);
+      applyDigitBones(VRMHumanBoneName.RightLittleProximal, VRMHumanBoneName.RightLittleIntermediate, VRMHumanBoneName.RightLittleDistal, curlLittle);
+    } else {
+      const qThumb = new THREE.Quaternion().setFromEuler(new THREE.Euler(curlThumb * 0.3, 0, -curlThumb * 0.5));
+      this.rigBoneQuat(VRMHumanBoneName.LeftThumbProximal, qThumb, 0.4);
+      this.rigBoneQuat(VRMHumanBoneName.LeftThumbDistal, qThumb, 0.4);
+
+      applyDigitBones(VRMHumanBoneName.LeftIndexProximal, VRMHumanBoneName.LeftIndexIntermediate, VRMHumanBoneName.LeftIndexDistal, curlIndex);
+      applyDigitBones(VRMHumanBoneName.LeftMiddleProximal, VRMHumanBoneName.LeftMiddleIntermediate, VRMHumanBoneName.LeftMiddleDistal, curlMiddle);
+      applyDigitBones(VRMHumanBoneName.LeftRingProximal, VRMHumanBoneName.LeftRingIntermediate, VRMHumanBoneName.LeftRingDistal, curlRing);
+      applyDigitBones(VRMHumanBoneName.LeftLittleProximal, VRMHumanBoneName.LeftLittleIntermediate, VRMHumanBoneName.LeftLittleDistal, curlLittle);
+    }
+  }
+
+  /**
+   * Slerp de dedos y muñecas hacia postura relajada abierta cuando la mano no está en cuadro.
+   */
+  private relaxFingers(side: 'right' | 'left'): void {
+    const ident = new THREE.Quaternion();
+    const bones = side === 'right'
+      ? [
+          VRMHumanBoneName.RightHand,
+          VRMHumanBoneName.RightIndexProximal, VRMHumanBoneName.RightIndexIntermediate, VRMHumanBoneName.RightIndexDistal,
+          VRMHumanBoneName.RightMiddleProximal, VRMHumanBoneName.RightMiddleIntermediate, VRMHumanBoneName.RightMiddleDistal,
+          VRMHumanBoneName.RightRingProximal, VRMHumanBoneName.RightRingIntermediate, VRMHumanBoneName.RightRingDistal,
+          VRMHumanBoneName.RightLittleProximal, VRMHumanBoneName.RightLittleIntermediate, VRMHumanBoneName.RightLittleDistal
+        ]
+      : [
+          VRMHumanBoneName.LeftHand,
+          VRMHumanBoneName.LeftIndexProximal, VRMHumanBoneName.LeftIndexIntermediate, VRMHumanBoneName.LeftIndexDistal,
+          VRMHumanBoneName.LeftMiddleProximal, VRMHumanBoneName.LeftMiddleIntermediate, VRMHumanBoneName.LeftMiddleDistal,
+          VRMHumanBoneName.LeftRingProximal, VRMHumanBoneName.LeftRingIntermediate, VRMHumanBoneName.LeftRingDistal,
+          VRMHumanBoneName.LeftLittleProximal, VRMHumanBoneName.LeftLittleIntermediate, VRMHumanBoneName.LeftLittleDistal
+        ];
+
+    for (const b of bones) {
+      this.rigBoneQuat(b, ident, 0.2);
+    }
+  }
+
+  /**
+   * Helper para rotación de hueso VRM por cuaternión con slerp.
+   */
+  private rigBoneQuat(boneName: VRMHumanBoneName, targetQuat: THREE.Quaternion, lerpAmount: number = 0.35): void {
+    if (!this.currentVrm) return;
+    const node = this.currentVrm.humanoid.getNormalizedBoneNode(boneName);
+    if (!node) return;
+    node.quaternion.slerp(targetQuat, lerpAmount);
   }
 
   /**
@@ -376,39 +423,23 @@ export class VrmAvatarViewer {
       neck.rotation.x = Math.sin(elapsed * 0.8) * 0.02;
     }
 
-    const rightUpperArm = this.currentVrm.humanoid.getNormalizedBoneNode(VRMHumanBoneName.RightUpperArm);
-    if (rightUpperArm) {
-      rightUpperArm.rotation.z = -0.15 + Math.sin(elapsed * 0.6) * 0.02;
-    }
-
-    const leftUpperArm = this.currentVrm.humanoid.getNormalizedBoneNode(VRMHumanBoneName.LeftUpperArm);
-    if (leftUpperArm) {
-      leftUpperArm.rotation.z = 0.15 + Math.sin(elapsed * 0.6) * 0.02;
-    }
-  }
-
-  /**
-   * Helper para aplicar rotación a un hueso VRM usando slerp para suavizado.
-   */
-  private rigBone(
-    boneName: VRMHumanBoneName,
-    rotation?: { x: number; y: number; z: number; rotationOrder?: string },
-    dampFactor: number = 1.0,
-    lerpAmount: number = 0.4
-  ): void {
-    if (!this.currentVrm || !rotation) return;
-    const boneNode = this.currentVrm.humanoid.getNormalizedBoneNode(boneName);
-    if (!boneNode) return;
-
-    const euler = new THREE.Euler(
-      rotation.x * dampFactor,
-      rotation.y * dampFactor,
-      rotation.z * dampFactor,
-      (rotation.rotationOrder as any) || 'XYZ'
+    const rightArmRestQuat = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(0, 0, -1.32 + Math.sin(elapsed * 0.6) * 0.02)
     );
-    const targetQuat = new THREE.Quaternion().setFromEuler(euler);
-    boneNode.quaternion.slerp(targetQuat, lerpAmount);
+    const leftArmRestQuat = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(0, 0, 1.32 - Math.sin(elapsed * 0.6) * 0.02)
+    );
+    const identQuat = new THREE.Quaternion();
+
+    this.rigBoneQuat(VRMHumanBoneName.RightUpperArm, rightArmRestQuat, 0.15);
+    this.rigBoneQuat(VRMHumanBoneName.LeftUpperArm, leftArmRestQuat, 0.15);
+    this.rigBoneQuat(VRMHumanBoneName.RightLowerArm, identQuat, 0.2);
+    this.rigBoneQuat(VRMHumanBoneName.LeftLowerArm, identQuat, 0.2);
+
+    this.relaxFingers('right');
+    this.relaxFingers('left');
   }
+
 
   public stop(): void {
     this.isAnimating = false;
