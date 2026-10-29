@@ -14,6 +14,7 @@ export interface LandmarkPoint {
 }
 
 export interface HolisticFrameLandmarks {
+  imageAspect?: number;
   pose?: LandmarkPoint[];
   poseWorld?: LandmarkPoint[];
   leftHand?: LandmarkPoint[];
