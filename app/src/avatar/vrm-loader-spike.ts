@@ -30,6 +30,7 @@ export class VrmAvatarViewer {
   private currentVrm: VRM | null = null;
   private clock: THREE.Clock;
   private isAnimating: boolean = false;
+  private animationFrame: number | null = null;
   private container: HTMLElement;
   private resizeObserver: ResizeObserver;
 
@@ -147,10 +148,11 @@ export class VrmAvatarViewer {
   public start(): void {
     if (this.isAnimating) return;
     this.isAnimating = true;
+    this.clock.start();
 
     const animate = () => {
       if (!this.isAnimating) return;
-      requestAnimationFrame(animate);
+      this.animationFrame = requestAnimationFrame(animate);
 
       const delta = this.clock.getDelta();
       const elapsed = this.clock.getElapsedTime();
@@ -483,6 +485,8 @@ export class VrmAvatarViewer {
 
   public stop(): void {
     this.isAnimating = false;
+    if (this.animationFrame != null) cancelAnimationFrame(this.animationFrame);
+    this.animationFrame = null;
   }
 
   /** Expone el VRM actual para inspección o utilidades */
