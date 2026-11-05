@@ -71,12 +71,28 @@ export class CatalogoPlayerService {
     }
   }
 
-  public getCatalog(): ReferenciaSenaData[] {
-    return this.catalogo;
+  public getCatalog(unit?: number): ReferenciaSenaData[] {
+    return unit === undefined
+      ? this.catalogo
+      : this.catalogo.filter((s) => s.unidad_tematica === unit);
+  }
+
+  public selectUnit(unit: number): ReferenciaSenaData[] {
+    this.pause();
+    this.selectedSena = null;
+    this.currentFrameIndex = 0;
+    this.playbackTimeMs = 0;
+    const references = this.getCatalog(unit);
+    if (references.length) this.selectSena(references[0].id);
+    return references;
   }
 
   public getIsLoaded(): boolean {
     return this.isLoaded;
+  }
+
+  public isDemo(sena: ReferenciaSenaData): boolean {
+    return !!this.mapFrameToLandmarks(sena.frames[this.getSegmentBounds(sena)[0]]).isDemo;
   }
 
   public getSelectedSena(): ReferenciaSenaData | null {

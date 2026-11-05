@@ -25,6 +25,28 @@ const btnToggleCamera = document.getElementById('btn-toggle-camera') as HTMLButt
 const btnToggleSynthetic = document.getElementById('btn-toggle-synthetic') as HTMLButtonElement;
 const avatarContainer = document.getElementById('avatar-container') as HTMLDivElement;
 const avatarLoading = document.getElementById('avatar-loading') as HTMLDivElement;
+const homeView = document.getElementById('home-view') as HTMLElement;
+const practiceView = document.getElementById('practice-view') as HTMLElement;
+const themesGrid = document.getElementById('tematicas-grid') as HTMLElement;
+const practiceTitle = document.getElementById('practice-title') as HTMLElement;
+const catalogNotice = document.getElementById('catalogo-notice') as HTMLElement;
+const retryResources = document.getElementById('btn-retry-resources') as HTMLButtonElement;
+const retryCatalog = document.getElementById('btn-retry-catalog') as HTMLButtonElement;
+const backToThemes = document.getElementById('btn-volver-tematicas') as HTMLButtonElement;
+const themes = [
+  ['Saludos', 'Primeros encuentros y presentaciones', '👋'],
+  ['Familia', 'Las personas que nos acompañan', '🏡'],
+  ['Colores', 'Un mundo lleno de matices', '🎨'],
+  ['Números', 'Cantidades para el día a día', '🔢'],
+  ['Días', 'Organiza y comparte tu semana', '📅'],
+  ['Escuela', 'Aprende y participa en clase', '📚'],
+  ['Alimentos', 'Sabores y comidas cotidianas', '🍎'],
+  ['Emociones', 'Expresa cómo te sientes', '💛'],
+  ['Lugares', 'Descubre tu entorno', '📍'],
+  ['Verbos frecuentes', 'Acciones que nos conectan', '✨'],
+  ['Preguntas', 'Abre nuevas conversaciones', '💬'],
+  ['Cortesía', 'Pequeños gestos para convivir', '🤝'],
+];
 
 // ─── Referencias del DOM: Catálogo y Reproductor ────────────────────────────
 const selectCatalogoSena = document.getElementById('select-catalogo-sena') as HTMLSelectElement;
@@ -44,6 +66,7 @@ let avatarDisplayMode: 'guia' | 'espejo' = 'guia';
 const tabPractica = document.getElementById('tab-practica') as HTMLButtonElement;
 const tabAnotador = document.getElementById('tab-anotador') as HTMLButtonElement;
 const anotadorDrawer = document.getElementById('anotador-drawer') as HTMLElement;
+anotadorDrawer.hidden = true;
 const btnCerrarAnotador = document.getElementById('btn-cerrar-anotador') as HTMLButtonElement;
 const btnRecordSena = document.getElementById('btn-record-sena') as HTMLButtonElement;
 const recordStatus = document.getElementById('record-status') as HTMLSpanElement;
@@ -76,41 +99,256 @@ const referenceStatus = document.getElementById('reference-status') as HTMLSpanE
 const annotationService = new AnnotationService();
 const catalogoService = new CatalogoPlayerService();
 
-// ─── Avatar VRM (Three.js + Kalidokit) ──────────────────────────────────────
-const avatarViewer = new VrmAvatarViewer({ container: avatarContainer });
+let avatarViewer: VrmAvatarViewer | null = null;
+let avatarLoad: Promise<unknown> | null = null;
+let visionLoad: Promise<void> | null = null;
+let cameraLoad: Promise<MediaStream> | null = null;
+let activeUnit: number | null = null;
+let sessionId = 0;
+let cameraRequest = 0;
+let cameraOwner = 0;
+let cameraOwnerRequest = 0;
+let animationFrame: number | null = null;
+const loadErrors = new Set<string>();
 
-// Cargar el modelo VRM de forma asíncrona al iniciar la página
-avatarViewer
-  .loadModel(VRM_MODEL_URL)
-  .then(() => {
-    avatarLoading.classList.add('oculto');
-    avatarViewer.start();
-    console.log('[main] ✓ Avatar VRM listo y animando.');
-  })
-  .catch((err) => {
-    console.error('[main] Error al cargar avatar VRM:', err);
-    avatarLoading.querySelector('.avatar-loading-text')!.textContent = 'Error al cargar avatar';
+function currentSession(id: number): boolean {
+  return activeUnit !== null && id === sessionId;
+}
+
+function resourceStatus(name: string, message: string, state: 'loading' | 'ready' | 'error'): void {
+  const label = document.getElementById(`load-${name}`)!;
+  label.textContent = message;
+  label.dataset.state = state;
+  if (state === 'error') loadErrors.add(name);
+  else loadErrors.delete(name);
+  retryResources.hidden = loadErrors.size === 0;
+}
+
+function renderThemes(): void {
+  themesGrid.replaceChildren();
+  themes.forEach(([name, description, icon], index) => {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'theme-card';
+    card.dataset.unit = String(index + 1);
+    const refs = catalogoService.getCatalog(index + 1);
+    const demo = refs.length > 0 && refs.every((s) => catalogoService.isDemo(s));
+    for (const [className, text] of [
+      ['theme-icon', icon],
+      ['theme-number', `UNIDAD ${String(index + 1).padStart(2, '0')}`],
+      ['theme-name', name],
+      ['theme-description', description],
+      [
+        'theme-count',
+        refs.length
+          ? `${refs.length} ${demo ? (refs.length === 1 ? 'demostración' : 'demostraciones') : refs.length === 1 ? 'seña' : 'señas'}`
+          : 'Referencias próximamente',
+      ],
+      ['theme-action', 'Explorar temática →'],
+    ]) {
+      const span = document.createElement('span');
+      span.className = className;
+      span.textContent = text;
+      if (className === 'theme-icon') span.setAttribute('aria-hidden', 'true');
+      card.appendChild(span);
+    }
+    card.addEventListener('click', () => enterTheme(index + 1));
+    themesGrid.appendChild(card);
   });
+}
 
-// ─── Inicialización del Catálogo de Señas ───────────────────────────────────
-catalogoService.loadCatalog().then((senas) => {
+function refreshSelectedCatalog(): void {
+  if (activeUnit === null) return;
+  const senas = catalogoService.selectUnit(activeUnit);
+  btnPlayerPlay.textContent = '▶ Reproducir';
+  btnPlayerPlay.classList.remove('playing');
   selectCatalogoSena.innerHTML = '';
-  if (senas.length === 0) {
+  selectCatalogoSena.disabled = senas.length === 0;
+  if (!senas.length) {
     const opt = document.createElement('option');
-    opt.textContent = 'Sin señas disponibles';
+    opt.value = '';
+    opt.textContent = 'Sin referencias en esta temática';
     selectCatalogoSena.appendChild(opt);
-    return;
+    fonologiaInfo.textContent =
+      'Las referencias de esta temática estarán disponibles próximamente.';
+    referenceStatus.textContent = 'Sin referencia seleccionada';
+    referenceRenderer.clear();
+    avatarViewer?.resetPose();
+    sliderPlayerProgress.value = '0';
+    playerTimeDisplay.textContent = '0/0';
   }
-
   senas.forEach((s) => {
     const opt = document.createElement('option');
     opt.value = s.id;
-    opt.textContent = `${s.glosa} (Unidad ${s.unidad_tematica} • ${s.dificultad})`;
+    opt.textContent = `${s.glosa}${catalogoService.isDemo(s) ? ' · demostración' : ''}`;
     selectCatalogoSena.appendChild(opt);
   });
-
+  selectCatalogoSena.value = senas[0]?.id ?? '';
+  const failed = !catalogoService.getIsLoaded();
+  catalogNotice.textContent = failed
+    ? 'No se pudo cargar el catálogo. Puedes usar el espejo y reintentar la carga.'
+    : !senas.length
+      ? 'Esta temática está sin referencias por ahora. Puedes explorar el espejo y el avatar.'
+      : senas.every((s) => catalogoService.isDemo(s))
+        ? 'Contenido de demostración. Las referencias LSEC revisadas se incorporarán próximamente.'
+        : `${senas.length} referencias disponibles en esta temática.`;
+  retryCatalog.hidden = !failed;
+  setAvatarDisplayMode(avatarDisplayMode);
   updateFonologiaDisplay();
+}
+
+async function loadCatalog(): Promise<void> {
+  await catalogoService.loadCatalog();
+  renderThemes();
+  refreshSelectedCatalog();
+}
+renderThemes();
+void loadCatalog();
+retryCatalog.addEventListener('click', async () => {
+  retryCatalog.disabled = true;
+  try {
+    await loadCatalog();
+  } finally {
+    retryCatalog.disabled = false;
+  }
 });
+
+async function prepareAvatar(id: number): Promise<void> {
+  resourceStatus('avatar', 'Preparando avatar…', 'loading');
+  try {
+    avatarViewer ??= new VrmAvatarViewer({ container: avatarContainer });
+    if (!avatarViewer.getVrm()) {
+      avatarLoad ??= avatarViewer.loadModel(VRM_MODEL_URL).finally(() => {
+        avatarLoad = null;
+      });
+      await avatarLoad;
+    }
+    if (!currentSession(id)) return;
+    avatarLoading.classList.add('oculto');
+    avatarViewer.start();
+    resourceStatus('avatar', 'Avatar listo', 'ready');
+  } catch (error) {
+    if (!currentSession(id)) return;
+    const message = error instanceof Error ? error.message : 'No disponible';
+    resourceStatus('avatar', `Avatar: ${message}`, 'error');
+    avatarLoading.querySelector('.avatar-loading-text')!.textContent =
+      'No se pudo preparar el avatar';
+  }
+}
+
+async function prepareVision(id: number): Promise<void> {
+  resourceStatus('vision', 'Preparando seguimiento…', 'loading');
+  try {
+    if (!visionService.getReadyStatus()) {
+      visionLoad ??= visionService.init().finally(() => {
+        visionLoad = null;
+      });
+      await visionLoad;
+    }
+    if (currentSession(id)) resourceStatus('vision', 'Seguimiento listo', 'ready');
+  } catch (error) {
+    if (!currentSession(id)) return;
+    resourceStatus(
+      'vision',
+      `Seguimiento: ${error instanceof Error ? error.message : 'No disponible'}`,
+      'error'
+    );
+  }
+}
+
+async function startCamera(id: number): Promise<void> {
+  if (cameraLoad && cameraOwner === id && cameraOwnerRequest === cameraRequest) return;
+  const request = ++cameraRequest;
+  cameraOwner = id;
+  cameraOwnerRequest = request;
+  btnToggleCamera.disabled = true;
+  resourceStatus('camera', 'Esperando cámara…', 'loading');
+  try {
+    if (cameraLoad) await cameraLoad.catch(() => {});
+    if (!currentSession(id) || request !== cameraRequest) return;
+    if (!cameraService.isRunning()) {
+      cameraLoad = cameraService.start().finally(() => {
+        cameraLoad = null;
+      });
+      await cameraLoad;
+    }
+    if (!currentSession(id) || request !== cameraRequest) {
+      cameraService.stop();
+      return;
+    }
+    isSimulating = false;
+    btnToggleSynthetic.textContent = 'Activar simulación';
+    btnToggleCamera.textContent = 'Apagar cámara';
+    resourceStatus('camera', 'Cámara activa', 'ready');
+    statusDisplay.textContent = 'Cámara activa';
+    statusDisplay.className = 'status-indicator ready';
+  } catch (error) {
+    if (!currentSession(id) || request !== cameraRequest) return;
+    resourceStatus(
+      'camera',
+      `Cámara: ${error instanceof Error ? error.message : 'No disponible'}`,
+      'error'
+    );
+    btnToggleCamera.textContent = 'Reintentar cámara';
+    statusDisplay.textContent = 'Cámara no disponible';
+    statusDisplay.className = 'status-indicator error';
+  } finally {
+    if (currentSession(id) && request === cameraRequest) btnToggleCamera.disabled = false;
+  }
+}
+
+async function prepareResources(id: number): Promise<void> {
+  await Promise.all([prepareAvatar(id), prepareVision(id), startCamera(id)]);
+}
+
+async function enterTheme(unit: number): Promise<void> {
+  if (activeUnit !== null) return;
+  activeUnit = unit;
+  avatarDisplayMode = 'guia';
+  const id = ++sessionId;
+  homeView.hidden = true;
+  practiceView.hidden = false;
+  practiceTitle.textContent = themes[unit - 1][0];
+  statusDisplay.textContent = 'Preparando práctica…';
+  statusDisplay.className = 'status-indicator';
+  practiceTitle.focus();
+  selectUnidad.value = String(unit);
+  lastTimestamp = performance.now();
+  refreshSelectedCatalog();
+  animationFrame = requestAnimationFrame(animationLoop);
+  await prepareResources(id);
+}
+
+backToThemes.addEventListener('click', () => {
+  if (annotationService.getIsRecording()) btnRecordSena.click();
+  activeUnit = null;
+  sessionId++;
+  cameraRequest++;
+  cameraService.stop();
+  avatarViewer?.stop();
+  avatarViewer?.resetPose();
+  catalogoService.pause();
+  if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+  animationFrame = null;
+  isSimulating = false;
+  lastVideoTime = -1;
+  lastDetection = { landmarks: {}, encuadreValido: false };
+  frameCount = 0;
+  fpsDisplay.textContent = 'FPS: --';
+  statusDisplay.textContent = 'Elige una temática';
+  statusDisplay.className = 'status-indicator';
+  btnToggleSynthetic.textContent = 'Activar simulación';
+  renderer.clear();
+  encuadreBox?.classList.remove('valido');
+  anotadorDrawer.classList.add('oculto');
+  anotadorDrawer.hidden = true;
+  tabPractica.classList.add('active');
+  tabAnotador.classList.remove('active');
+  practiceView.hidden = true;
+  homeView.hidden = false;
+  themesGrid.focus();
+});
+retryResources.addEventListener('click', () => prepareResources(sessionId));
 
 function updateFonologiaDisplay(): void {
   const sena = catalogoService.getSelectedSena();
@@ -128,7 +366,7 @@ function updateFonologiaDisplay(): void {
 }
 
 selectCatalogoSena.addEventListener('change', () => {
-  avatarViewer.resetPose();
+  avatarViewer?.resetPose();
   catalogoService.selectSena(selectCatalogoSena.value);
   updateFonologiaDisplay();
   if (catalogoService.getIsPlaying()) {
@@ -164,7 +402,7 @@ sliderPlayerProgress.addEventListener('input', () => {
   if (sena && sena.frames[targetFrame]) {
     const update = catalogoService.update(performance.now());
     if (update.landmarks) {
-      avatarViewer.updatePose(update.landmarks);
+      avatarViewer?.updatePose(update.landmarks);
       referenceRenderer.render(update.landmarks);
     }
     playerTimeDisplay.textContent = `${targetFrame}/${sena.frames.length}`;
@@ -172,7 +410,7 @@ sliderPlayerProgress.addEventListener('input', () => {
 });
 
 btnPlayerRestart.addEventListener('click', () => {
-  avatarViewer.resetPose();
+  avatarViewer?.resetPose();
   catalogoService.seekFrame(0);
   catalogoService.play();
   btnPlayerPlay.textContent = '⏸ Pausar';
@@ -182,13 +420,13 @@ btnPlayerRestart.addEventListener('click', () => {
 // ─── Selector de Modo de Avatar (Guía vs Reflejo en Vivo) ───────────────────
 function setAvatarDisplayMode(mode: 'guia' | 'espejo'): void {
   avatarDisplayMode = mode;
-  avatarViewer.resetPose();
+  avatarViewer?.resetPose();
   btnModeGuia.classList[mode === 'guia' ? 'add' : 'remove']('active');
   btnModeEspejo.classList[mode === 'espejo' ? 'add' : 'remove']('active');
   btnModeGuia.setAttribute('aria-pressed', String(mode === 'guia'));
   btnModeEspejo.setAttribute('aria-pressed', String(mode === 'espejo'));
   for (const control of [btnPlayerPlay, btnPlayerSpeed, btnPlayerRestart, sliderPlayerProgress])
-    control.disabled = mode !== 'guia';
+    control.disabled = mode !== 'guia' || !catalogoService.getSelectedSena();
   if (mode === 'espejo') {
     catalogoService.pause();
     btnPlayerPlay.textContent = '▶ Reproducir';
@@ -220,6 +458,7 @@ window.addEventListener('resize', syncCanvasSize);
 
 // ─── Bucle de renderizado principal (RAF) ────────────────────────────────────
 function animationLoop(timestamp: number) {
+  if (activeUnit === null) return;
   if (timestamp - lastTimestamp >= 1000) {
     currentFps = Math.round((frameCount * 1000) / (timestamp - lastTimestamp));
     fpsDisplay.textContent = `FPS: ${currentFps}`;
@@ -283,7 +522,7 @@ function animationLoop(timestamp: number) {
     // NUNCA es sobreescrito por la cámara del usuario mientras esté en modo guía.
     const guideUpdate = catalogoService.update(timestamp);
     if (guideUpdate.landmarks) {
-      avatarViewer.updatePose(guideUpdate.landmarks);
+      avatarViewer?.updatePose(guideUpdate.landmarks);
       referenceRenderer.render(guideUpdate.landmarks);
       referenceStatus.textContent = guideUpdate.landmarks.isDemo
         ? 'Demostración: mano abierta de respaldo'
@@ -294,80 +533,48 @@ function animationLoop(timestamp: number) {
   } else {
     // MODO REFLEJO EN VIVO: el avatar actúa como espejo 3D del usuario en tiempo real
     if (userLandmarks.pose || userLandmarks.rightHand || userLandmarks.leftHand) {
-      avatarViewer.updatePose(userLandmarks);
+      avatarViewer?.updatePose(userLandmarks);
     } else {
-      avatarViewer.updatePose({});
+      avatarViewer?.updatePose({});
     }
   }
 
-  void requestAnimationFrame(animationLoop);
+  animationFrame = requestAnimationFrame(animationLoop);
 }
-
-// Iniciar bucle del espejo
-void requestAnimationFrame(animationLoop);
 
 // ─── Control de cámara ───────────────────────────────────────────────────────
 btnToggleCamera.addEventListener('click', async () => {
-  try {
-    if (cameraService.isRunning()) {
-      cameraService.stop();
-      lastVideoTime = -1;
-      lastDetection = { landmarks: {}, encuadreValido: false };
-      btnToggleCamera.textContent = 'Encender Cámara';
-      btnToggleCamera.classList.remove('btn-secondary');
-      btnToggleCamera.classList.add('btn-primary');
-      statusDisplay.textContent = 'Cámara detenida';
-      statusDisplay.className = 'status-indicator';
-      renderer.clear();
-      encuadreBox?.classList.remove('valido');
-    } else {
-      isSimulating = false;
-      btnToggleSynthetic.textContent = 'Modo Simulación (Spike)';
-      statusDisplay.textContent = 'Iniciando cámara...';
-
-      await cameraService.start();
-
-      btnToggleCamera.textContent = 'Apagar Cámara';
-      btnToggleCamera.classList.remove('btn-primary');
-      btnToggleCamera.classList.add('btn-secondary');
-
-      statusDisplay.textContent = 'Cargando modelos MediaPipe...';
-      statusDisplay.className = 'status-indicator';
-
-      try {
-        await visionService.init();
-        statusDisplay.textContent = 'Seguimiento Activo (GPU)';
-        statusDisplay.className = 'status-indicator ready';
-      } catch (modelErr) {
-        statusDisplay.textContent = 'Cámara activa (error al cargar modelo)';
-        statusDisplay.className = 'status-indicator error';
-        console.error(modelErr);
-      }
-    }
-  } catch (err: unknown) {
-    const error = err as Error;
-    statusDisplay.textContent = error.message;
-    statusDisplay.className = 'status-indicator error';
-    console.error('[Viseña Cámara Error]', error);
+  if (activeUnit === null) return;
+  if (cameraService.isRunning()) {
+    cameraRequest++;
+    cameraService.stop();
+    lastVideoTime = -1;
+    lastDetection = { landmarks: {}, encuadreValido: false };
+    renderer.clear();
+    encuadreBox?.classList.remove('valido');
+    btnToggleCamera.textContent = 'Encender cámara';
+    resourceStatus('camera', 'Cámara detenida', 'ready');
+    statusDisplay.textContent = 'Cámara detenida';
+    statusDisplay.className = 'status-indicator';
+  } else {
+    await Promise.all([prepareVision(sessionId), startCamera(sessionId)]);
   }
 });
 
 // ─── Control de simulación sintética (Spike/Offline) ─────────────────────────
 btnToggleSynthetic.addEventListener('click', () => {
-  if (cameraService.isRunning()) {
-    cameraService.stop();
-    btnToggleCamera.textContent = 'Encender Cámara';
-    btnToggleCamera.classList.add('btn-primary');
-    btnToggleCamera.classList.remove('btn-secondary');
-  }
-
+  cameraRequest++;
+  cameraService.stop();
+  btnToggleCamera.disabled = false;
+  btnToggleCamera.textContent = 'Encender cámara';
+  resourceStatus('camera', 'Cámara detenida', 'ready');
   isSimulating = !isSimulating;
   if (isSimulating) {
     btnToggleSynthetic.textContent = 'Detener Simulación';
     statusDisplay.textContent = 'Modo Simulación Activo';
     statusDisplay.className = 'status-indicator ready';
   } else {
-    btnToggleSynthetic.textContent = 'Modo Simulación (Spike)';
+    btnToggleSynthetic.textContent = 'Activar simulación';
     statusDisplay.textContent = 'En espera';
     statusDisplay.className = 'status-indicator';
     renderer.clear();
@@ -376,15 +583,19 @@ btnToggleSynthetic.addEventListener('click', () => {
 
 // ─── Lógica de Navegación Tabs & Drawer Anotador ──────────────────────────────
 tabPractica.addEventListener('click', () => {
+  if (activeUnit === null) void enterTheme(1);
   tabPractica.classList.add('active');
   tabAnotador.classList.remove('active');
   anotadorDrawer.classList.add('oculto');
+  anotadorDrawer.hidden = true;
 });
 
 tabAnotador.addEventListener('click', () => {
+  if (activeUnit === null) void enterTheme(1);
   tabAnotador.classList.add('active');
   tabPractica.classList.remove('active');
   anotadorDrawer.classList.remove('oculto');
+  anotadorDrawer.hidden = false;
 });
 
 btnCerrarAnotador.addEventListener('click', () => {

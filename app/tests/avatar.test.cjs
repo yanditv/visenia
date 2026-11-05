@@ -25,6 +25,31 @@ function rig() {
   return { v, bones, expressions };
 }
 const point = (x, y, z = 0) => ({ x, y, z, visibility: 1 });
+
+test('salir y volver al avatar conserva un solo bucle de animación', (t) => {
+  const scheduled = new Map();
+  let id = 0;
+  global.requestAnimationFrame = (fn) => {
+    scheduled.set(++id, fn);
+    return id;
+  };
+  global.cancelAnimationFrame = (key) => scheduled.delete(key);
+  t.after(() => {
+    delete global.requestAnimationFrame;
+    delete global.cancelAnimationFrame;
+  });
+  const v = Object.create(VrmAvatarViewer.prototype);
+  v.currentVrm = null;
+  v.clock = { start() {}, getDelta: () => 0, getElapsedTime: () => 0 };
+  v.renderer = { render() {} };
+  v.start();
+  assert.equal(scheduled.size, 1);
+  v.stop();
+  assert.equal(scheduled.size, 0);
+  v.start();
+  assert.equal(scheduled.size, 1);
+  v.stop();
+});
 function pose() {
   const p = Array.from({ length: 33 }, () => point(0.5, 0.5));
   p[11] = point(0.7, 0.4);
@@ -125,7 +150,7 @@ test('cuadros solo con overrides llegan al solver', () => {
   const { v, bones } = rig();
   v.isAnimating = false;
   v.latestLandmarks = { vrmPoseOverride: { head: [0, 0, 0, 1] } };
-  v.clock = { getDelta: () => 0.016, getElapsedTime: () => 1 };
+  v.clock = { start() {}, getDelta: () => 0.016, getElapsedTime: () => 1 };
   v.renderer = {
     render() {
       v.isAnimating = false;

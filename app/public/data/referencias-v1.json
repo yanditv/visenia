@@ -14681,7 +14681,7 @@
     "schema_version": "1.1.0",
     "id": "ref-gracias",
     "glosa": "GRACIAS",
-    "unidad_tematica": 1,
+    "unidad_tematica": 12,
     "dificultad": "facil",
     "mano_dominante": "derecha",
     "metadatos_grabacion": {
@@ -27734,7 +27734,7 @@
     "schema_version": "1.1.0",
     "id": "ref-por-favor",
     "glosa": "POR FAVOR",
-    "unidad_tematica": 1,
+    "unidad_tematica": 12,
     "dificultad": "intermedio",
     "mano_dominante": "derecha",
     "metadatos_grabacion": {

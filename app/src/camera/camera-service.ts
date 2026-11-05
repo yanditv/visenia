@@ -12,10 +12,11 @@ export interface CameraConfig {
 export const DEFAULT_CAMERA_CONFIG: CameraConfig = {
   width: 640,
   height: 480,
-  fps: 30
+  fps: 30,
 };
 
 export class CameraService {
+  private requestId = 0;
   private stream: MediaStream | null = null;
   private videoElement: HTMLVideoElement | null = null;
 
@@ -25,31 +26,38 @@ export class CameraService {
 
   public async start(config: CameraConfig = DEFAULT_CAMERA_CONFIG): Promise<MediaStream> {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      throw new Error('La API navigator.mediaDevices.getUserMedia no está disponible en este navegador o contexto inseguro (requiere HTTPS).');
+      throw new Error(
+        'La API navigator.mediaDevices.getUserMedia no está disponible en este navegador o contexto inseguro (requiere HTTPS).'
+      );
     }
 
-    if (this.stream) {
-      this.stop();
-    }
+    this.stop();
+    const requestId = this.requestId;
 
     const constraints: MediaStreamConstraints = {
       video: {
         width: { ideal: config.width },
         height: { ideal: config.height },
         frameRate: { ideal: config.fps, max: 60 },
-        facingMode: 'user'
+        facingMode: 'user',
       },
-      audio: false
+      audio: false,
     };
 
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      if (requestId !== this.requestId) {
+        stream.getTracks().forEach((track) => track.stop());
+        throw new Error('Solicitud de cámara cancelada.');
+      }
+      this.stream = stream;
       if (this.videoElement) {
         this.videoElement.srcObject = this.stream;
         await this.videoElement.play();
       }
       return this.stream;
     } catch (err: unknown) {
+      if (requestId === this.requestId) this.stop();
       const error = err as Error;
       if (error.name === 'NotAllowedError') {
         throw new Error('Permiso de acceso a la cámara denegado por el usuario.');
@@ -62,6 +70,7 @@ export class CameraService {
   }
 
   public stop(): void {
+    this.requestId++;
     if (this.stream) {
       this.stream.getTracks().forEach((track) => track.stop());
       this.stream = null;
