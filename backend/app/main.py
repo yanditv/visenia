@@ -18,6 +18,10 @@ from app.services.openhands_runtime import (
     InferenceError
 )
 
+from app.schemas.evaluation import EvaluationRequest
+
+from app.services.evaluation_engine import evaluate_sign
+
 
 app = FastAPI(
     title="VISENA API",
@@ -220,3 +224,37 @@ def recognize_sign(file: UploadFile = File(...)):
 
         if temp_path is not None:
             temp_path.unlink(missing_ok=True)
+
+
+@app.post(
+    "/api/v1/evaluations",
+    tags=["Evaluation"]
+)
+def evaluate_video(request: EvaluationRequest):
+
+    try:
+        result = evaluate_sign(
+            reference_id=str(request.reference_id),
+            candidate_id=str(request.candidate_id),
+            ref_start=request.ref_start,
+            ref_end=request.ref_end,
+            user_start=request.user_start,
+            user_end=request.user_end
+        )
+
+        return result
+
+    except FileNotFoundError as error:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "No se encontraron los landmarks "
+                "preprocesados de uno de los videos."
+            )
+        ) from error
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=422,
+            detail=str(error)
+        ) from error
