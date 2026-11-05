@@ -69,5 +69,4 @@ Thumbs.db
 models/
 
 # Data
-**/data/processed/
-**/data/preprocessed/
+**/data
