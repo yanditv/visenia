@@ -22,6 +22,18 @@ from app.schemas.evaluation import EvaluationRequest
 
 from app.services.evaluation_engine import evaluate_sign
 
+import os
+import json
+import logging
+
+from app.schemas.nearest_neighbor import (
+    NearestNeighborRequest
+)
+
+from app.services.nearest_neighbor import (
+    find_nearest
+)
+
 
 app = FastAPI(
     title="VISENA API",
@@ -257,4 +269,54 @@ def evaluate_video(request: EvaluationRequest):
         raise HTTPException(
             status_code=422,
             detail=str(error)
+        ) from error
+
+
+@app.post(
+    "/api/v1/evaluations/nearest",
+    tags=["Evaluation"]
+)
+def find_nearest_reference(
+    request: NearestNeighborRequest
+):
+    # El modo demo solo debe habilitarse
+    # expresamente en desarrollo local.
+    if request.demo_mode and (
+        os.getenv("VISENA_ENABLE_DEMO") != "1"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Modo demostracion deshabilitado."
+        )
+
+    try:
+        result = find_nearest(
+            candidate_id=str(request.candidate_id),
+            gloss=request.gloss,
+            user_start=request.user_start,
+            user_end=request.user_end,
+            k=request.k,
+            demo_mode=request.demo_mode
+        )
+
+        return result
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=422,
+            detail=str(error)
+        ) from error
+
+    except (
+        FileNotFoundError,
+        json.JSONDecodeError,
+        KeyError
+    ) as error:
+        logging.exception(
+            "Error al leer referencias VISENA"
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo consultar el catalogo."
         ) from error
