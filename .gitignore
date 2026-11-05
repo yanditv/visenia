@@ -23,6 +23,7 @@ __pycache__/
 env/
 venv/
 .venv/
+.venv-openhands/
 build/
 develop-eggs/
 dist/
