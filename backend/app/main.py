@@ -34,6 +34,11 @@ from app.services.nearest_neighbor import (
     find_nearest
 )
 
+from app.schemas.scoring import ScoringDemoRequest
+
+from app.services.scoring_engine import (
+    run as run_scoring
+)
 
 app = FastAPI(
     title="VISENA API",
@@ -319,4 +324,47 @@ def find_nearest_reference(
         raise HTTPException(
             status_code=500,
             detail="No se pudo consultar el catalogo."
+        ) from error
+
+
+@app.post(
+    "/api/v1/evaluations/demo-score",
+    tags=["Evaluation"]
+)
+def evaluate_demo_score(
+    request: ScoringDemoRequest
+):
+
+    # No permitir demostraciones sin habilitacion local.
+    if os.getenv("VISENA_ENABLE_DEMO") != "1":
+        raise HTTPException(
+            status_code=403,
+            detail="Modo demostracion deshabilitado."
+        )
+
+    try:
+        result = run_scoring(
+            reference_id=str(request.reference_id),
+            candidate_id=str(request.candidate_id),
+            ref_start=request.ref_start,
+            ref_end=request.ref_end,
+            user_start=request.user_start,
+            user_end=request.user_end
+        )
+
+        return result
+
+    except FileNotFoundError as error:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "No se encontraron los archivos "
+                "necesarios para la evaluacion."
+            )
+        ) from error
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=422,
+            detail=str(error)
         ) from error
