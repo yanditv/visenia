@@ -37,7 +37,7 @@ def process_video(video_path: Path) -> dict:
         )
 
         effective_fps = fps or 30.0
-        frame_interval = max(1, round(effective_fps / 5))
+        frame_interval = max(1, round(effective_fps / 15))
 
         frames_processed = 0
         frames_sampled = 0
@@ -165,6 +165,8 @@ def process_video(video_path: Path) -> dict:
                 timestamps,
                 dtype=np.int64
             ),
+            frame_width=np.int32(width),
+            frame_height=np.int32(height),
             **arrays
         )
 
