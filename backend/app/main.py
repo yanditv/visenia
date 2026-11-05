@@ -6,6 +6,10 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 
 from app.services.video_processor import process_video
 
+from uuid import UUID
+from fastapi.responses import FileResponse
+from app.services.video_processor import PROCESSED_DIR
+
 
 app = FastAPI(
     title="VISENA API",
@@ -74,3 +78,26 @@ def upload_video(file: UploadFile = File(...)):
     finally:
         if temp_path is not None:
             temp_path.unlink(missing_ok=True)
+
+
+@app.get(
+    "/api/v1/videos/landmarks/{processing_id}",
+    tags=["Videos"]
+)
+def download_landmarks(processing_id: UUID):
+    file_path = (
+        PROCESSED_DIR / f"{processing_id.hex}.npz"
+    )
+
+    if not file_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Archivo de landmarks no encontrado."
+        )
+
+    return FileResponse(
+        path=file_path,
+        filename=f"visena-{processing_id.hex}.npz",
+        media_type="application/octet-stream"
+    )
+

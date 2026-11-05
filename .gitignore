@@ -66,4 +66,7 @@ Thumbs.db
 !.vscode/settings.json
 
 # IA Models
-models/*.task
+models/
+
+# Data
+**/data/processed/

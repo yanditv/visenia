@@ -3,6 +3,8 @@ from pathlib import Path
 
 import mediapipe as mp
 
+import numpy as np
+
 
 MODEL_PATH = (
     Path(__file__).resolve().parents[2]
@@ -43,3 +45,25 @@ def get_wrist_coordinates(landmarks):
         "y": round(wrist.y, 4),
         "z": round(wrist.z, 4)
     }
+
+def landmarks_to_numpy(landmarks, expected_count: int):
+    coordinates = np.full(
+        (expected_count, 3),
+        np.nan,
+        dtype=np.float32
+    )
+
+    if landmarks:
+        if len(landmarks) != expected_count:
+            raise ValueError(
+                "Cantidad inesperada de landmarks."
+            )
+
+        for index, point in enumerate(landmarks):
+            coordinates[index] = [
+                point.x,
+                point.y,
+                point.z
+            ]
+
+    return coordinates

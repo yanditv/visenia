@@ -5,11 +5,21 @@ from pathlib import Path
 import cv2
 import mediapipe as mp
 
+import numpy as np
+from uuid import uuid4
+
 from app.services.landmark_extractor import (
     create_landmarker,
     get_wrist_coordinates,
+    landmarks_to_numpy
 )
 
+
+PROCESSED_DIR = (
+    Path(__file__).resolve().parents[2]
+    / "data"
+    / "processed"
+)
 
 def process_video(video_path: Path) -> dict:
     capture = cv2.VideoCapture(str(video_path))
@@ -41,6 +51,15 @@ def process_video(video_path: Path) -> dict:
         face_frames = 0
 
         wrist_sample = None
+
+        timestamps = []
+
+        landmark_sequences = {
+            "left_hand": [],
+            "right_hand": [],
+            "pose": [],
+            "face": []
+}
 
         with create_landmarker() as landmarker:
             while True:
@@ -78,6 +97,24 @@ def process_video(video_path: Path) -> dict:
                     timestamp_ms
                 )
 
+                timestamps.append(timestamp_ms)
+
+                landmark_sequences["left_hand"].append(
+                    landmarks_to_numpy(result.left_hand_landmarks, 21)
+                )
+
+                landmark_sequences["right_hand"].append(
+                    landmarks_to_numpy(result.right_hand_landmarks, 21)
+                )
+
+                landmark_sequences["pose"].append(
+                    landmarks_to_numpy(result.pose_landmarks, 33)
+                )
+
+                landmark_sequences["face"].append(
+                    landmarks_to_numpy(result.face_landmarks, 478)
+                )
+
                 if result.left_hand_landmarks:
                     left_hand_frames += 1
 
@@ -109,6 +146,29 @@ def process_video(video_path: Path) -> dict:
                 "El video no contiene fotogramas decodificables."
             )
 
+        PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+
+        processing_id = uuid4().hex
+
+        output_path = (
+            PROCESSED_DIR / f"{processing_id}.npz"
+        )
+
+        arrays = {
+            name: np.stack(sequence)
+            for name, sequence in landmark_sequences.items()
+        }
+
+        np.savez_compressed(
+            output_path,
+            timestamps_ms=np.array(
+                timestamps,
+                dtype=np.int64
+            ),
+            **arrays
+        )
+
+
         return {
             "fps": round(fps, 2) if fps else None,
             "duration_seconds": (
@@ -127,6 +187,14 @@ def process_video(video_path: Path) -> dict:
                 "pose_frames": pose_frames,
                 "face_frames": face_frames,
                 "wrist_sample": wrist_sample,
+            },
+            "landmark_export": {
+                "id": processing_id,
+                "format": "npz",
+                "download_url": (
+                    f"/api/v1/videos/landmarks/{processing_id}"
+                ),
+                "frames": len(timestamps)
             }
         }
 
