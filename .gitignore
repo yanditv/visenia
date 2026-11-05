@@ -64,3 +64,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# IA Models
+models/*.task
