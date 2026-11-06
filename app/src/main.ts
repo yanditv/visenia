@@ -8,6 +8,7 @@
  *  - Catálogo y reproductor: reproduce señas de referencia a 1x y 0.5x
  *  - Anotador fonológico: captura, segmentación y exportación de referencias JSON schema v1.1.0
  */
+import { mensajes, themes } from '../i18n/es-EC/mensajes';
 import { CameraService } from './camera/camera-service';
 import { SkeletonRenderer, HolisticFrameLandmarks } from './render/skeleton-renderer';
 import { VisionService } from './vision/vision-service';
@@ -33,20 +34,6 @@ const catalogNotice = document.getElementById('catalogo-notice') as HTMLElement;
 const retryResources = document.getElementById('btn-retry-resources') as HTMLButtonElement;
 const retryCatalog = document.getElementById('btn-retry-catalog') as HTMLButtonElement;
 const backToThemes = document.getElementById('btn-volver-tematicas') as HTMLButtonElement;
-const themes = [
-  ['Saludos', 'Primeros encuentros y presentaciones', '👋'],
-  ['Familia', 'Las personas que nos acompañan', '🏡'],
-  ['Colores', 'Un mundo lleno de matices', '🎨'],
-  ['Números', 'Cantidades para el día a día', '🔢'],
-  ['Días', 'Organiza y comparte tu semana', '📅'],
-  ['Escuela', 'Aprende y participa en clase', '📚'],
-  ['Alimentos', 'Sabores y comidas cotidianas', '🍎'],
-  ['Emociones', 'Expresa cómo te sientes', '💛'],
-  ['Lugares', 'Descubre tu entorno', '📍'],
-  ['Verbos frecuentes', 'Acciones que nos conectan', '✨'],
-  ['Preguntas', 'Abre nuevas conversaciones', '💬'],
-  ['Cortesía', 'Pequeños gestos para convivir', '🤝'],
-];
 
 // ─── Referencias del DOM: Catálogo y Reproductor ────────────────────────────
 const selectCatalogoSena = document.getElementById('select-catalogo-sena') as HTMLSelectElement;
@@ -135,16 +122,16 @@ function renderThemes(): void {
     const demo = refs.length > 0 && refs.every((s) => catalogoService.isDemo(s));
     for (const [className, text] of [
       ['theme-icon', icon],
-      ['theme-number', `UNIDAD ${String(index + 1).padStart(2, '0')}`],
+      ['theme-number', mensajes.unidad(String(index + 1).padStart(2, '0'))],
       ['theme-name', name],
       ['theme-description', description],
       [
         'theme-count',
         refs.length
-          ? `${refs.length} ${demo ? (refs.length === 1 ? 'demostración' : 'demostraciones') : refs.length === 1 ? 'seña' : 'señas'}`
-          : 'Referencias próximamente',
+          ? `${refs.length} ${demo ? (refs.length === 1 ? mensajes.demostracion : mensajes.demostraciones) : refs.length === 1 ? mensajes.sena : mensajes.senas}`
+          : mensajes.referenciaPendiente,
       ],
-      ['theme-action', 'Explorar temática →'],
+      ['theme-action', mensajes.explorarTema],
     ]) {
       const span = document.createElement('span');
       span.className = className;
@@ -160,18 +147,17 @@ function renderThemes(): void {
 function refreshSelectedCatalog(): void {
   if (activeUnit === null) return;
   const senas = catalogoService.selectUnit(activeUnit);
-  btnPlayerPlay.textContent = '▶ Reproducir';
+  btnPlayerPlay.textContent = mensajes.reproducir;
   btnPlayerPlay.classList.remove('playing');
   selectCatalogoSena.innerHTML = '';
   selectCatalogoSena.disabled = senas.length === 0;
   if (!senas.length) {
     const opt = document.createElement('option');
     opt.value = '';
-    opt.textContent = 'Sin referencias en esta temática';
+    opt.textContent = mensajes.selectorVacio;
     selectCatalogoSena.appendChild(opt);
-    fonologiaInfo.textContent =
-      'Las referencias de esta temática estarán disponibles próximamente.';
-    referenceStatus.textContent = 'Sin referencia seleccionada';
+    fonologiaInfo.textContent = mensajes.referenciasProximamente;
+    referenceStatus.textContent = mensajes.sinSeleccion;
     referenceRenderer.clear();
     avatarViewer?.resetPose();
     sliderPlayerProgress.value = '0';
@@ -180,18 +166,18 @@ function refreshSelectedCatalog(): void {
   senas.forEach((s) => {
     const opt = document.createElement('option');
     opt.value = s.id;
-    opt.textContent = `${s.glosa}${catalogoService.isDemo(s) ? ' · demostración' : ''}`;
+    opt.textContent = `${s.glosa}${catalogoService.isDemo(s) ? mensajes.etiquetaDemostracion : ''}`;
     selectCatalogoSena.appendChild(opt);
   });
   selectCatalogoSena.value = senas[0]?.id ?? '';
   const failed = !catalogoService.getIsLoaded();
   catalogNotice.textContent = failed
-    ? 'No se pudo cargar el catálogo. Puedes usar el espejo y reintentar la carga.'
+    ? mensajes.errorCatalogo
     : !senas.length
-      ? 'Esta temática está sin referencias por ahora. Puedes explorar el espejo y el avatar.'
+      ? mensajes.temaVacio
       : senas.every((s) => catalogoService.isDemo(s))
-        ? 'Contenido de demostración. Las referencias LSEC revisadas se incorporarán próximamente.'
-        : `${senas.length} referencias disponibles en esta temática.`;
+        ? mensajes.catalogoDemo
+        : mensajes.referenciasDisponibles(senas.length);
   retryCatalog.hidden = !failed;
   setAvatarDisplayMode(avatarDisplayMode);
   updateFonologiaDisplay();
@@ -214,7 +200,7 @@ retryCatalog.addEventListener('click', async () => {
 });
 
 async function prepareAvatar(id: number): Promise<void> {
-  resourceStatus('avatar', 'Preparando avatar…', 'loading');
+  resourceStatus('avatar', mensajes.avatarCargando, 'loading');
   try {
     avatarViewer ??= new VrmAvatarViewer({ container: avatarContainer });
     if (!avatarViewer.getVrm()) {
@@ -226,18 +212,17 @@ async function prepareAvatar(id: number): Promise<void> {
     if (!currentSession(id)) return;
     avatarLoading.classList.add('oculto');
     avatarViewer.start();
-    resourceStatus('avatar', 'Avatar listo', 'ready');
+    resourceStatus('avatar', mensajes.avatarListo, 'ready');
   } catch (error) {
     if (!currentSession(id)) return;
-    const message = error instanceof Error ? error.message : 'No disponible';
-    resourceStatus('avatar', `Avatar: ${message}`, 'error');
-    avatarLoading.querySelector('.avatar-loading-text')!.textContent =
-      'No se pudo preparar el avatar';
+    const message = error instanceof Error ? error.message : mensajes.recursoNoDisponible;
+    resourceStatus('avatar', mensajes.avatarError(message), 'error');
+    avatarLoading.querySelector('.avatar-loading-text')!.textContent = mensajes.errorAvatar;
   }
 }
 
 async function prepareVision(id: number): Promise<void> {
-  resourceStatus('vision', 'Preparando seguimiento…', 'loading');
+  resourceStatus('vision', mensajes.visionCargando, 'loading');
   try {
     if (!visionService.getReadyStatus()) {
       visionLoad ??= visionService.init().finally(() => {
@@ -245,12 +230,12 @@ async function prepareVision(id: number): Promise<void> {
       });
       await visionLoad;
     }
-    if (currentSession(id)) resourceStatus('vision', 'Seguimiento listo', 'ready');
+    if (currentSession(id)) resourceStatus('vision', mensajes.visionLista, 'ready');
   } catch (error) {
     if (!currentSession(id)) return;
     resourceStatus(
       'vision',
-      `Seguimiento: ${error instanceof Error ? error.message : 'No disponible'}`,
+      mensajes.visionError(error instanceof Error ? error.message : mensajes.recursoNoDisponible),
       'error'
     );
   }
@@ -262,7 +247,7 @@ async function startCamera(id: number): Promise<void> {
   cameraOwner = id;
   cameraOwnerRequest = request;
   btnToggleCamera.disabled = true;
-  resourceStatus('camera', 'Esperando cámara…', 'loading');
+  resourceStatus('camera', mensajes.camaraPendiente, 'loading');
   try {
     if (cameraLoad) await cameraLoad.catch(() => {});
     if (!currentSession(id) || request !== cameraRequest) return;
@@ -277,20 +262,20 @@ async function startCamera(id: number): Promise<void> {
       return;
     }
     isSimulating = false;
-    btnToggleSynthetic.textContent = 'Activar simulación';
-    btnToggleCamera.textContent = 'Apagar cámara';
-    resourceStatus('camera', 'Cámara activa', 'ready');
-    statusDisplay.textContent = 'Cámara activa';
+    btnToggleSynthetic.textContent = mensajes.activarSimulacion;
+    btnToggleCamera.textContent = mensajes.apagarCamara;
+    resourceStatus('camera', mensajes.camaraActiva, 'ready');
+    statusDisplay.textContent = mensajes.camaraActiva;
     statusDisplay.className = 'status-indicator ready';
   } catch (error) {
     if (!currentSession(id) || request !== cameraRequest) return;
     resourceStatus(
       'camera',
-      `Cámara: ${error instanceof Error ? error.message : 'No disponible'}`,
+      mensajes.camaraError(error instanceof Error ? error.message : mensajes.recursoNoDisponible),
       'error'
     );
-    btnToggleCamera.textContent = 'Reintentar cámara';
-    statusDisplay.textContent = 'Cámara no disponible';
+    btnToggleCamera.textContent = mensajes.reintentarCamara;
+    statusDisplay.textContent = mensajes.camaraNoDisponible;
     statusDisplay.className = 'status-indicator error';
   } finally {
     if (currentSession(id) && request === cameraRequest) btnToggleCamera.disabled = false;
@@ -309,7 +294,7 @@ async function enterTheme(unit: number): Promise<void> {
   homeView.hidden = true;
   practiceView.hidden = false;
   practiceTitle.textContent = themes[unit - 1][0];
-  statusDisplay.textContent = 'Preparando práctica…';
+  statusDisplay.textContent = mensajes.preparandoPractica;
   statusDisplay.className = 'status-indicator';
   practiceTitle.focus();
   selectUnidad.value = String(unit);
@@ -334,14 +319,15 @@ backToThemes.addEventListener('click', () => {
   lastVideoTime = -1;
   lastDetection = { landmarks: {}, encuadreValido: false };
   frameCount = 0;
-  fpsDisplay.textContent = 'FPS: --';
-  statusDisplay.textContent = 'Elige una temática';
+  fpsDisplay.textContent = mensajes.fpsInicial;
+  statusDisplay.textContent = mensajes.elegirTema;
   statusDisplay.className = 'status-indicator';
-  btnToggleSynthetic.textContent = 'Activar simulación';
+  btnToggleSynthetic.textContent = mensajes.activarSimulacion;
   renderer.clear();
   encuadreBox?.classList.remove('valido');
   anotadorDrawer.classList.add('oculto');
   anotadorDrawer.hidden = true;
+  tabAnotador.setAttribute('aria-expanded', 'false');
   tabPractica.classList.add('active');
   tabAnotador.classList.remove('active');
   practiceView.hidden = true;
@@ -357,7 +343,13 @@ function updateFonologiaDisplay(): void {
     const toponema = params.toponema_ubicacion.zona_corporal.replace('_', ' ');
     const kinesema = params.kinesema_movimiento.tipo_movimiento;
     const queirema = params.queirema_configuracion.codigo_forma.replaceAll('_', ' ');
-    fonologiaInfo.textContent = `Ubicación: ${toponema} • Movimiento: ${kinesema} • Forma: ${queirema} • Palma: ${params.kinema_orientacion.vector_palma.join(', ')} • Expresión: ${params.prosoponema_no_manual.requerido ? 'requerida' : 'neutra'}`;
+    fonologiaInfo.textContent = mensajes.fonologia(
+      toponema,
+      kinesema,
+      queirema,
+      params.kinema_orientacion.vector_palma.join(', '),
+      params.prosoponema_no_manual.requerido
+    );
     sliderPlayerProgress.min = sena.segmentacion.frame_inicio_sena.toString();
     sliderPlayerProgress.max = sena.segmentacion.frame_fin_sena.toString();
     sliderPlayerProgress.value = catalogoService.getCurrentFrameIndex().toString();
@@ -378,10 +370,10 @@ selectCatalogoSena.addEventListener('change', () => {
 btnPlayerPlay.addEventListener('click', () => {
   const isNowPlaying = catalogoService.togglePlay();
   if (isNowPlaying) {
-    btnPlayerPlay.textContent = '⏸ Pausar';
+    btnPlayerPlay.textContent = mensajes.pausar;
     btnPlayerPlay.classList.add('playing');
   } else {
-    btnPlayerPlay.textContent = '▶ Reproducir';
+    btnPlayerPlay.textContent = mensajes.reproducir;
     btnPlayerPlay.classList.remove('playing');
   }
 });
@@ -391,7 +383,7 @@ btnPlayerSpeed.addEventListener('click', () => {
   const nextSpeed = currentSpeed === 1.0 ? 0.5 : 1.0;
   catalogoService.setSpeed(nextSpeed);
   btnPlayerSpeed.textContent = `${nextSpeed.toFixed(1)}×`;
-  btnPlayerSpeed.title = nextSpeed === 0.5 ? 'Velocidad Lenta (0.5x)' : 'Velocidad Normal (1.0x)';
+  btnPlayerSpeed.title = nextSpeed === 0.5 ? mensajes.velocidadLenta : mensajes.velocidadNormal;
 });
 
 sliderPlayerProgress.addEventListener('input', () => {
@@ -413,7 +405,7 @@ btnPlayerRestart.addEventListener('click', () => {
   avatarViewer?.resetPose();
   catalogoService.seekFrame(0);
   catalogoService.play();
-  btnPlayerPlay.textContent = '⏸ Pausar';
+  btnPlayerPlay.textContent = mensajes.pausar;
   btnPlayerPlay.classList.add('playing');
 });
 
@@ -429,7 +421,7 @@ function setAvatarDisplayMode(mode: 'guia' | 'espejo'): void {
     control.disabled = mode !== 'guia' || !catalogoService.getSelectedSena();
   if (mode === 'espejo') {
     catalogoService.pause();
-    btnPlayerPlay.textContent = '▶ Reproducir';
+    btnPlayerPlay.textContent = mensajes.reproducir;
     btnPlayerPlay.classList.remove('playing');
   }
 }
@@ -461,7 +453,7 @@ function animationLoop(timestamp: number) {
   if (activeUnit === null) return;
   if (timestamp - lastTimestamp >= 1000) {
     currentFps = Math.round((frameCount * 1000) / (timestamp - lastTimestamp));
-    fpsDisplay.textContent = `FPS: ${currentFps}`;
+    fpsDisplay.textContent = mensajes.fps(currentFps);
     frameCount = 0;
     lastTimestamp = timestamp;
   }
@@ -510,7 +502,7 @@ function animationLoop(timestamp: number) {
       const frames = annotationService.getRecordedFrames();
       const lastFrame = frames[frames.length - 1];
       const durSec = (lastFrame.timestamp_ms / 1000).toFixed(1);
-      recordCounter.textContent = `Frames: ${frames.length} | ${durSec}s`;
+      recordCounter.textContent = mensajes.cuadros(frames.length, durSec);
     }
   } else {
     renderer.clear();
@@ -525,8 +517,8 @@ function animationLoop(timestamp: number) {
       avatarViewer?.updatePose(guideUpdate.landmarks);
       referenceRenderer.render(guideUpdate.landmarks);
       referenceStatus.textContent = guideUpdate.landmarks.isDemo
-        ? 'Demostración: mano abierta de respaldo'
-        : 'Esqueleto de referencia';
+        ? mensajes.manoRespaldo
+        : mensajes.esqueletoReferencia;
       sliderPlayerProgress.value = guideUpdate.frameIndex.toString();
       playerTimeDisplay.textContent = `${guideUpdate.frameIndex}/${guideUpdate.totalFrames}`;
     }
@@ -552,9 +544,9 @@ btnToggleCamera.addEventListener('click', async () => {
     lastDetection = { landmarks: {}, encuadreValido: false };
     renderer.clear();
     encuadreBox?.classList.remove('valido');
-    btnToggleCamera.textContent = 'Encender cámara';
-    resourceStatus('camera', 'Cámara detenida', 'ready');
-    statusDisplay.textContent = 'Cámara detenida';
+    btnToggleCamera.textContent = mensajes.encenderCamara;
+    resourceStatus('camera', mensajes.camaraDetenida, 'ready');
+    statusDisplay.textContent = mensajes.camaraDetenida;
     statusDisplay.className = 'status-indicator';
   } else {
     await Promise.all([prepareVision(sessionId), startCamera(sessionId)]);
@@ -566,16 +558,16 @@ btnToggleSynthetic.addEventListener('click', () => {
   cameraRequest++;
   cameraService.stop();
   btnToggleCamera.disabled = false;
-  btnToggleCamera.textContent = 'Encender cámara';
-  resourceStatus('camera', 'Cámara detenida', 'ready');
+  btnToggleCamera.textContent = mensajes.encenderCamara;
+  resourceStatus('camera', mensajes.camaraDetenida, 'ready');
   isSimulating = !isSimulating;
   if (isSimulating) {
-    btnToggleSynthetic.textContent = 'Detener Simulación';
-    statusDisplay.textContent = 'Modo Simulación Activo';
+    btnToggleSynthetic.textContent = mensajes.detenerSimulacion;
+    statusDisplay.textContent = mensajes.simulacionActiva;
     statusDisplay.className = 'status-indicator ready';
   } else {
-    btnToggleSynthetic.textContent = 'Activar simulación';
-    statusDisplay.textContent = 'En espera';
+    btnToggleSynthetic.textContent = mensajes.activarSimulacion;
+    statusDisplay.textContent = mensajes.espera;
     statusDisplay.className = 'status-indicator';
     renderer.clear();
   }
@@ -588,6 +580,7 @@ tabPractica.addEventListener('click', () => {
   tabAnotador.classList.remove('active');
   anotadorDrawer.classList.add('oculto');
   anotadorDrawer.hidden = true;
+  tabAnotador.setAttribute('aria-expanded', 'false');
 });
 
 tabAnotador.addEventListener('click', () => {
@@ -596,30 +589,33 @@ tabAnotador.addEventListener('click', () => {
   tabPractica.classList.remove('active');
   anotadorDrawer.classList.remove('oculto');
   anotadorDrawer.hidden = false;
+  tabAnotador.setAttribute('aria-expanded', 'true');
+  btnCerrarAnotador.focus();
 });
 
 btnCerrarAnotador.addEventListener('click', () => {
   tabPractica.click();
+  tabAnotador.focus();
 });
 
 // ─── Controles de Grabación de Seña ──────────────────────────────────────────
 btnRecordSena.addEventListener('click', () => {
   if (!annotationService.getIsRecording()) {
     if (!cameraService.isRunning() && !isSimulating) {
-      alert('Por favor enciende la cámara o activa el Modo Simulación antes de grabar.');
+      alert(mensajes.activarAntesDeGrabar);
       return;
     }
     annotationService.startRecording();
-    btnRecordSena.textContent = '⏹ Detener Grabación';
+    btnRecordSena.textContent = mensajes.detenerGrabacion;
     btnRecordSena.classList.add('recording');
-    recordStatus.textContent = 'Grabando...';
+    recordStatus.textContent = mensajes.grabando;
     recordStatus.style.color = '#ef4444';
     exportMsg.textContent = '';
   } else {
     const stats = annotationService.stopRecording();
-    btnRecordSena.textContent = '⏺ Grabar Nueva Toma';
+    btnRecordSena.textContent = mensajes.nuevaToma;
     btnRecordSena.classList.remove('recording');
-    recordStatus.textContent = `Grabación finalizada (${stats.totalFrames} frames)`;
+    recordStatus.textContent = mensajes.tomaFinalizada(stats.totalFrames);
     recordStatus.style.color = '#22c55e';
 
     const maxIdx = Math.max(0, stats.totalFrames - 1);
@@ -652,14 +648,14 @@ sliderFrameFin.addEventListener('input', () => {
 btnExportJson.addEventListener('click', () => {
   const recorded = annotationService.getRecordedFrames();
   if (recorded.length === 0) {
-    exportMsg.textContent = '⚠️ Primero debes grabar una toma con frames válidos.';
+    exportMsg.textContent = mensajes.tomaObligatoria;
     exportMsg.className = 'export-msg error';
     return;
   }
 
   const glosa = inputGlosa.value.trim();
   if (!glosa) {
-    exportMsg.textContent = '⚠️ La glosa de la seña es obligatoria.';
+    exportMsg.textContent = mensajes.glosaObligatoria;
     exportMsg.className = 'export-msg error';
     return;
   }
@@ -683,11 +679,11 @@ btnExportJson.addEventListener('click', () => {
     });
 
     annotationService.downloadJson(doc);
-    exportMsg.textContent = `✓ Referencia ${doc.id}.json exportada correctamente.`;
+    exportMsg.textContent = mensajes.referenciaExportada(doc.id);
     exportMsg.className = 'export-msg success';
   } catch (err: unknown) {
     const error = err as Error;
-    exportMsg.textContent = `Error: ${error.message}`;
+    exportMsg.textContent = mensajes.error(error.message);
     exportMsg.className = 'export-msg error';
   }
 });

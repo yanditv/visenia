@@ -3,158 +3,185 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0f172a" />
-    <meta
-      name="description"
-      content="Espejo y Catálogo de Práctica de Lengua de Señas - Viseña (Sprint 1)"
-    />
+    <meta name="theme-color" content="#14213D" />
+    <meta name="description" content="{{espejo_y_catalogo_de_practica_de}}" />
     <link rel="manifest" href="/manifest.json" />
-    <title>Viseña · Aprende Lengua de Señas Ecuatoriana</title>
+    <title>{{visena_aprende_lengua_de_senas_ecuatoriana}}</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <div id="app">
       <header class="app-header">
         <div class="logo-area">
-          <h1>Viseña</h1>
-          <span class="badge">Lengua de Señas Ecuatoriana</span>
+          <h1>{{visena}}</h1>
+          <span class="badge">{{lengua_de_senas_ecuatoriana}}</span>
         </div>
 
-        <nav class="nav-tabs" aria-label="Modos de la aplicación">
-          <button id="tab-practica" class="tab-btn active">Espacio de práctica</button>
-          <button id="tab-anotador" class="tab-btn">Anotar referencias</button>
-        </nav>
+        <details class="advanced-tools">
+          <summary>{{herramientas}}</summary>
+          <nav class="nav-tabs" aria-label="{{herramientas_de_practica}}">
+            <button id="tab-practica" class="tab-btn active">{{espacio_de_practica}}</button>
+            <button
+              id="tab-anotador"
+              class="tab-btn"
+              aria-controls="anotador-drawer"
+              aria-expanded="false"
+            >
+              {{anotar_referencias}}
+            </button>
+          </nav>
+          <div class="hud-stats">
+            <span id="fps-display">{{fps}}</span><span id="preferred-hand-display"></span>
+          </div>
+        </details>
 
-        <div class="hud-stats">
-          <span id="fps-display">FPS: --</span>
-          <span id="status-display" class="status-indicator" role="status">Elige una temática</span>
-        </div>
+        <details class="settings">
+          <summary>{{ajustes}}</summary>
+          <div class="settings-fields">
+            <label for="text-size">{{tamano_de_texto}}</label
+            ><select id="text-size">
+              <option value="18">{{normal}}</option>
+              <option value="21">{{grande}}</option>
+              <option value="24">{{muy_grande}}</option></select
+            ><label class="contrast-toggle"
+              ><input id="high-contrast" type="checkbox" /> {{alto_contraste}}</label
+            ><label for="preferred-hand">{{mano_dominante}}</label
+            ><select id="preferred-hand">
+              <option value="derecha">{{derecha}}</option>
+              <option value="izquierda">{{izquierda}}</option>
+              <option value="ambas">{{ambas}}</option>
+            </select>
+          </div>
+        </details>
       </header>
 
       <main id="home-view" class="home-view">
         <section class="home-hero" aria-labelledby="home-title">
           <div>
-            <p class="eyebrow">APRENDE · OBSERVA · PRACTICA</p>
-            <h2 id="home-title">Una seña abre<br />una conversación<span>.</span></h2>
-            <p class="hero-description">
-              Explora la Lengua de Señas Ecuatoriana a tu ritmo. Elige una temática y descubre tu
-              espacio de práctica con espejo y avatar.
-            </p>
-            <a class="btn btn-primary hero-link" href="#tematicas-title">Elegir una temática ↓</a>
+            <p class="eyebrow">{{aprende_observa_practica}}</p>
+            <h2 id="home-title">
+              {{una_sena_abre}}<br />{{una_conversacion}}<span>{{simbolo}}</span>
+            </h2>
+            <p class="hero-description">{{explora_la_lengua_de_senas_ecuatoriana}}</p>
+            <a class="btn btn-primary hero-link" href="#tematicas-title">{{elegir_una_tematica}}</a>
           </div>
-          <aside class="home-guide" aria-label="Cómo practicar">
-            <span class="guide-symbol" aria-hidden="true">🤟</span>
-            <h3>Aprender también es conectar</h3>
+          <aside class="home-guide" aria-label="{{como_practicar}}">
+            <span class="guide-symbol" aria-hidden="true">{{simbolo_2}}</span>
+            <h3>{{aprender_tambien_es_conectar}}</h3>
             <ol>
-              <li><strong>Elige</strong> una temática que te interese.</li>
-              <li><strong>Observa</strong> las referencias disponibles.</li>
-              <li><strong>Practica</strong> tus movimientos frente al espejo.</li>
+              <li><strong>{{elige}}</strong> {{una_tematica_que_te_interese}}</li>
+              <li><strong>{{observa}}</strong> {{las_referencias_disponibles}}</li>
+              <li><strong>{{practica}}</strong> {{tus_movimientos_frente_al_espejo}}</li>
             </ol>
-            <p>Tu cámara se solicita al entrar. Puedes seguir explorando si no la activas.</p>
+            <p>{{tu_camara_se_solicita_al_entrar}}</p>
           </aside>
         </section>
         <section aria-labelledby="tematicas-title">
           <div class="themes-heading">
             <div>
-              <p class="eyebrow">TU RECORRIDO</p>
-              <h2 id="tematicas-title">¿Qué quieres aprender hoy?</h2>
+              <p class="eyebrow">{{tu_recorrido}}</p>
+              <h2 id="tematicas-title">{{que_quieres_aprender_hoy}}</h2>
             </div>
-            <span class="themes-total">12 temáticas para explorar</span>
+            <span class="themes-total">{{12_tematicas_para_explorar}}</span>
           </div>
-          <p class="themes-intro">
-            Las referencias revisadas se incorporarán por etapas. Mientras tanto, puedes conocer el
-            espejo en cualquier temática.
-          </p>
+          <p class="themes-intro">{{las_referencias_revisadas_se_incorporaran_por}}</p>
           <div
             id="tematicas-grid"
             class="themes-grid"
             tabindex="-1"
-            aria-label="Temáticas de aprendizaje"
+            aria-label="{{tematicas_de_aprendizaje}}"
           ></div>
         </section>
       </main>
 
       <div id="practice-view" class="practice-view" hidden>
         <div class="practice-toolbar">
-          <button id="btn-volver-tematicas" class="btn btn-secondary">← Volver a temáticas</button>
+          <button id="btn-volver-tematicas" class="btn btn-secondary">
+            {{volver_a_tematicas}}
+          </button>
           <div>
-            <p class="eyebrow">ESPACIO DE PRÁCTICA</p>
-            <h2 id="practice-title" tabindex="-1">Saludos</h2>
+            <p class="eyebrow">{{espacio_de_practica_2}}</p>
+            <h2 id="practice-title" tabindex="-1">{{saludos}}</h2>
           </div>
         </div>
-        <section class="resource-panel" aria-label="Preparación de la práctica">
+        <section class="resource-panel" aria-label="{{preparacion_de_la_practica}}">
           <div class="resource-statuses" role="status" aria-live="polite" aria-atomic="true">
-            <span id="load-avatar" data-state="loading">Preparando avatar…</span>
-            <span id="load-vision" data-state="loading">Preparando seguimiento…</span>
-            <span id="load-camera" data-state="loading">Esperando cámara…</span>
+            <span id="load-avatar" data-state="loading">{{preparando_avatar}}</span>
+            <span id="load-vision" data-state="loading">{{preparando_seguimiento}}</span>
+            <span id="load-camera" data-state="loading">{{esperando_camara}}</span>
           </div>
           <button id="btn-retry-resources" class="btn btn-secondary" hidden>
-            Reintentar recursos
+            {{reintentar_recursos}}
           </button>
         </section>
         <div class="catalog-notice-bar">
-          <p id="catalogo-notice" role="status">Preparando catálogo…</p>
+          <p id="catalogo-notice" role="status">{{preparando_catalogo}}</p>
           <button id="btn-retry-catalog" class="btn btn-secondary" hidden>
-            Reintentar catálogo
+            {{reintentar_catalogo}}
           </button>
         </div>
 
         <!-- Layout dividido: Espejo usuario (izq) | Avatar guía y catálogo (der) -->
         <main class="split-container">
           <!-- Panel izquierdo: espejo del usuario -->
-          <section class="panel panel-usuario" aria-label="Espejo del usuario">
-            <div class="panel-label">Tú (Espejo de Práctica)</div>
+          <section class="panel panel-usuario" aria-label="{{espejo_del_usuario}}">
+            <h3 class="panel-label">{{tu_espejo}}</h3>
             <div class="viewport-wrapper">
-              <video id="webcam-video" autoplay playsinline muted></video>
+              <span id="status-display" class="status-indicator camera-status" role="status"
+                >{{elige_una_tematica}}</span
+              ><video id="webcam-video" autoplay playsinline muted></video>
               <canvas id="skeleton-canvas"></canvas>
 
               <div id="encuadre-overlay" class="encuadre-overlay">
                 <div class="encuadre-box">
-                  <span class="encuadre-tip">Ubica tu torso y manos dentro del área</span>
+                  <span class="encuadre-tip frame-waiting">{{encuadre_ubica_tu_torso_y_manos}}</span
+                  ><span class="encuadre-tip frame-ready">{{listo_encuadre_valido}}</span>
                 </div>
               </div>
+            </div>
+            <div class="camera-controls">
+              <button id="btn-toggle-camera" class="btn btn-secondary">{{encender_camara}}</button
+              ><span class="evaluation-idle">{{sin_evaluar}}</span>
             </div>
           </section>
 
           <!-- Panel derecho: avatar guía VRM y reproductor de catálogo -->
-          <section class="panel panel-avatar" aria-label="Avatar guía y reproductor">
+          <section class="panel panel-avatar" aria-label="{{avatar_guia_y_reproductor}}">
+            <h3 class="panel-label">{{avatar_y_catalogo}}</h3>
             <div class="avatar-header-bar">
               <div class="sena-selector-group">
-                <label for="select-catalogo-sena">Seña Guía:</label>
+                <label for="select-catalogo-sena">{{sena_guia}}</label>
                 <select id="select-catalogo-sena" class="select-sena">
-                  <option value="">Cargando catálogo...</option>
+                  <option value="">{{cargando_catalogo}}</option>
                 </select>
               </div>
               <div
                 class="avatar-mode-segmented"
                 role="group"
-                aria-label="Modo de visualización del avatar"
+                aria-label="{{modo_de_visualizacion_del_avatar}}"
               >
                 <button
                   id="btn-mode-guia"
                   aria-pressed="true"
                   class="mode-btn active"
-                  title="Reproduce la seña canónica del catálogo de referencia"
+                  title="{{reproduce_la_sena_canonica_del_catalogo}}"
                 >
-                  📖 Modo Guía
+                  {{modo_guia}}
                 </button>
                 <button
                   id="btn-mode-espejo"
                   aria-pressed="false"
                   class="mode-btn"
-                  title="El avatar refleja tu movimiento en tiempo real 3D"
+                  title="{{el_avatar_refleja_tu_movimiento_en}}"
                 >
-                  🪞 Reflejo en Vivo
+                  {{reflejo_en_vivo}}
                 </button>
-              </div>
-              <div id="fonologia-badge" class="fonologia-badge">
-                <span id="fonologia-info">Toponema: -- • Mov: --</span>
               </div>
             </div>
 
             <div id="avatar-container" class="avatar-wrapper">
               <div id="avatar-loading" class="avatar-loading">
-                <span class="avatar-loading-text">Cargando avatar…</span>
+                <span class="avatar-loading-text">{{cargando_avatar}}</span>
               </div>
             </div>
 
@@ -164,35 +191,45 @@
                 width="640"
                 height="480"
                 role="img"
-                aria-label="Esqueleto de la seña del catálogo"
+                aria-label="{{esqueleto_de_la_sena_del_catalogo}}"
               ></canvas>
-              <figcaption id="reference-status">Esqueleto de referencia</figcaption>
+              <figcaption id="reference-status">{{esqueleto_de_referencia}}</figcaption>
             </figure>
 
             <!-- Barra de reproducción interactiva -->
             <div class="avatar-player-bar">
-              <button id="btn-player-play" class="btn btn-player-play">▶ Reproducir</button>
+              <button id="btn-player-play" class="btn btn-player-play">{{reproducir}}</button>
               <button
                 id="btn-player-speed"
                 class="btn btn-player-speed"
-                title="Alternar velocidad normal y lenta (1x / 0.5x)"
+                title="{{alternar_velocidad_normal_y_lenta_1x}}"
               >
-                1.0×
+                {{1_0}}
               </button>
               <input
                 type="range"
                 id="slider-player-progress"
-                aria-label="Posición en la seña de referencia"
+                aria-label="{{posicion_en_la_sena_de_referencia}}"
                 class="player-progress"
                 min="0"
                 max="100"
                 value="0"
               />
-              <span id="player-time-display" class="player-time">0/0</span>
-              <button id="btn-player-restart" class="btn btn-player-icon" title="Reiniciar seña">
-                ↺
+              <span id="player-time-display" class="player-time">{{0_0}}</span>
+              <button
+                id="btn-player-restart"
+                class="btn btn-player-icon"
+                aria-label="{{reiniciar_sena}}"
+              >
+                {{simbolo_3}}
               </button>
             </div>
+            <details class="reference-details">
+              <summary>{{detalles_de_la_referencia}}</summary>
+              <div id="fonologia-badge" class="fonologia-badge">
+                <span id="fonologia-info"></span>
+              </div>
+            </details>
           </section>
         </main>
 
@@ -201,35 +238,35 @@
           id="anotador-drawer"
           hidden
           class="anotador-drawer oculto"
-          aria-label="Herramienta de Anotación Fonológica"
+          aria-label="{{herramienta_de_anotacion_fonologica}}"
         >
           <div class="drawer-header">
-            <h2>Herramienta de Anotación de Referencia</h2>
-            <button id="btn-cerrar-anotador" class="btn-icon" aria-label="Cerrar anotador">
-              ✕
+            <h2>{{herramienta_de_anotacion_de_referencia}}</h2>
+            <button id="btn-cerrar-anotador" class="btn-icon" aria-label="{{cerrar_anotador}}">
+              {{simbolo_4}}
             </button>
           </div>
 
           <div class="drawer-body">
             <!-- 1. Captura y Grabación -->
             <div class="anotador-card">
-              <h3>1. Grabación Temporal</h3>
+              <h3>{{1_grabacion_temporal}}</h3>
               <div class="grabacion-controls">
-                <button id="btn-record-sena" class="btn btn-record">⏺ Grabar Seña</button>
+                <button id="btn-record-sena" class="btn btn-record">{{grabar_sena}}</button>
                 <div class="grabacion-info">
-                  <span id="record-status">En espera</span>
-                  <span id="record-counter">Frames: 0 | 0.0s</span>
+                  <span id="record-status">{{en_espera}}</span>
+                  <span id="record-counter">{{frames_0_0_0s}}</span>
                 </div>
               </div>
 
               <div class="segmentacion-section">
-                <label>Segmentación Fonológica (Frames):</label>
+                <label>{{segmentacion_fonologica_frames}}</label>
                 <div class="slider-group">
-                  <span>Inicio: <strong id="lbl-frame-inicio">0</strong></span>
+                  <span>{{inicio}} <strong id="lbl-frame-inicio">{{0}}</strong></span>
                   <input type="range" id="slider-frame-inicio" min="0" max="100" value="0" />
                 </div>
                 <div class="slider-group">
-                  <span>Fin: <strong id="lbl-frame-fin">0</strong></span>
+                  <span>{{fin}} <strong id="lbl-frame-fin">{{0}}</strong></span>
                   <input type="range" id="slider-frame-fin" min="0" max="100" value="0" />
                 </div>
               </div>
@@ -237,86 +274,86 @@
 
             <!-- 2. Formulario de Parámetros Fonológicos (Stokoe / ERS 6.1) -->
             <div class="anotador-card">
-              <h3>2. Parámetros Fonológicos (ERS 6.1)</h3>
+              <h3>{{2_parametros_fonologicos_ers_6_1}}</h3>
               <div class="form-grid">
                 <div class="form-field">
-                  <label for="input-glosa">Glosa (Seña):</label>
+                  <label for="input-glosa">{{glosa_sena}}</label>
                   <input
                     type="text"
                     id="input-glosa"
-                    placeholder="Ej: GRACIAS, HOLA"
+                    placeholder="{{ej_gracias_hola}}"
                     value="HOLA"
                   />
                 </div>
 
                 <div class="form-field">
-                  <label for="select-unidad">Unidad Temática (1-12):</label>
+                  <label for="select-unidad">{{unidad_tematica_1_12}}</label>
                   <input type="number" id="select-unidad" min="1" max="12" value="1" />
                 </div>
 
                 <div class="form-field">
-                  <label for="select-dificultad">Dificultad:</label>
+                  <label for="select-dificultad">{{dificultad}}</label>
                   <select id="select-dificultad">
-                    <option value="facil" selected>Fácil</option>
-                    <option value="intermedio">Intermedio</option>
-                    <option value="avanzado">Avanzado</option>
+                    <option value="facil" selected>{{facil}}</option>
+                    <option value="intermedio">{{intermedio}}</option>
+                    <option value="avanzado">{{avanzado}}</option>
                   </select>
                 </div>
 
                 <div class="form-field">
-                  <label for="select-mano-dom">Mano Dominante:</label>
+                  <label for="select-mano-dom">{{mano_dominante_2}}</label>
                   <select id="select-mano-dom">
-                    <option value="derecha" selected>Derecha</option>
-                    <option value="izquierda">Izquierda</option>
-                    <option value="ambas">Ambas</option>
+                    <option value="derecha" selected>{{derecha}}</option>
+                    <option value="izquierda">{{izquierda}}</option>
+                    <option value="ambas">{{ambas}}</option>
                   </select>
                 </div>
 
                 <div class="form-field">
-                  <label for="select-toponema">Toponema (Zona Corporal):</label>
+                  <label for="select-toponema">{{toponema_zona_corporal}}</label>
                   <select id="select-toponema">
-                    <option value="neutro_espacio" selected>Espacio Neutro</option>
-                    <option value="cabeza">Cabeza</option>
-                    <option value="frente">Frente</option>
-                    <option value="pecho">Pecho</option>
-                    <option value="barbilla">Barbilla</option>
-                    <option value="hombro">Hombro</option>
-                    <option value="mano_base">Mano Base</option>
+                    <option value="neutro_espacio" selected>{{espacio_neutro}}</option>
+                    <option value="cabeza">{{cabeza}}</option>
+                    <option value="frente">{{frente}}</option>
+                    <option value="pecho">{{pecho}}</option>
+                    <option value="barbilla">{{barbilla}}</option>
+                    <option value="hombro">{{hombro}}</option>
+                    <option value="mano_base">{{mano_base}}</option>
                   </select>
                 </div>
 
                 <div class="form-field">
-                  <label for="select-kinesema">Kinesema (Movimiento):</label>
+                  <label for="select-kinesema">{{kinesema_movimiento}}</label>
                   <select id="select-kinesema">
-                    <option value="rectilineo" selected>Rectilíneo</option>
-                    <option value="curvo">Curvo</option>
-                    <option value="circular">Circular</option>
-                    <option value="ondulatorio">Ondulatorio</option>
-                    <option value="estatico">Estático</option>
+                    <option value="rectilineo" selected>{{rectilineo}}</option>
+                    <option value="curvo">{{curvo}}</option>
+                    <option value="circular">{{circular}}</option>
+                    <option value="ondulatorio">{{ondulatorio}}</option>
+                    <option value="estatico">{{estatico}}</option>
                   </select>
                 </div>
 
                 <div class="form-field full-width">
-                  <label for="input-queirema">Queirema (Configuración de la Mano):</label>
+                  <label for="input-queirema">{{queirema_configuracion_de_la_mano}}</label>
                   <input
                     type="text"
                     id="input-queirema"
-                    placeholder="Ej: mano_plana_dedos_juntos"
+                    placeholder="{{ej_mano_plana_dedos_juntos}}"
                     value="mano_plana"
                   />
                 </div>
 
                 <div class="form-field full-width">
                   <label>
-                    <input type="checkbox" id="check-prosoponema" /> Prosoponema Requerido
-                    (Expresión Facial / No Manual)
+                    <input type="checkbox" id="check-prosoponema" />
+                    {{prosoponema_requerido_expresion_facial_no_manual}}
                   </label>
                 </div>
               </div>
 
               <div class="export-actions">
                 <button id="btn-export-json" class="btn btn-primary btn-large">
-                  💾 Exportar JSON (referencia.schema.json v1.1.0)
+                  {{exportar_json_referencia_schema_json_v1}}
                 </button>
                 <span id="export-msg" class="export-msg"></span>
               </div>
@@ -325,23 +362,26 @@
         </section>
 
         <!-- Controles globales de cámara y leyenda -->
-        <div class="controls-panel">
-          <button id="btn-toggle-camera" class="btn btn-primary">Encender Cámara</button>
-          <button id="btn-toggle-synthetic" class="btn btn-secondary">Activar simulación</button>
-          <div class="legend">
-            <span class="dot pose-dot"></span> Torso / Pose <span class="dot hand-dot"></span> Manos
-            (21 pts) <span class="dot face-dot"></span> Rostro
+        <details class="practice-tools">
+          <summary>{{simulacion_y_guia_visual}}</summary>
+          <div class="controls-panel">
+            <button id="btn-toggle-synthetic" class="btn btn-secondary">
+              {{activar_simulacion}}
+            </button>
+            <div class="legend">
+              <span class="dot pose-dot"></span> {{torso_pose}}
+              <span class="dot hand-dot"></span> {{manos_21_pts}}
+              <span class="dot face-dot"></span> {{rostro}}
+            </div>
           </div>
-        </div>
+        </details>
       </div>
       <footer class="app-footer">
-        <small
-          >Viseña · Lengua de Señas Ecuatoriana · Universidad Católica de Cuenca · Fondo
-          INVENTA</small
-        >
+        <small>{{visena_lengua_de_senas_ecuatoriana_universidad}}</small>
       </footer>
     </div>
 
     <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/ui/preferencias.ts"></script>
   </body>
 </html>

@@ -152,6 +152,7 @@ exports.boot = (options = {}) => {
     }
   }
   const modules = {
+    '../i18n/es-EC/mensajes': require('./load-ts.cjs')('i18n/es-EC/mensajes.ts'),
     './camera/camera-service': { CameraService: Camera },
     './vision/vision-service': { VisionService: Vision },
     './avatar/vrm-loader-spike': { VrmAvatarViewer: Viewer },

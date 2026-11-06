@@ -1,0 +1,65 @@
+@font-face {
+  font-family: Lexend;
+  src: url('/fonts/lexend.ttf') format('truetype');
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  src: url('/fonts/atkinson-regular.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  src: url('/fonts/atkinson-bold.ttf') format('truetype');
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  --vs-ink: #14213d;
+  --vs-primary: #2f4fd8;
+  --vs-on-primary: #fff;
+  --vs-mist: #e3e9ff;
+  --vs-sun: #f5b83d;
+  --vs-paper: #f7f5ef;
+  --vs-surface: #fff;
+  --vs-line: #d9d5c8;
+  --vs-muted: #4a5270;
+  --vs-ok: #17724a;
+  --vs-warn: var(--vs-sun);
+  --vs-bad: #b42318;
+  --vs-idle: #e7e5dc;
+  --vs-cam: #0b1020;
+  --vs-skeleton: #5eead4;
+  --vs-joint: #fff;
+  --vs-error-ring: var(--vs-sun);
+  --vs-font-base: 18px;
+  --vs-tap: 44px;
+  --vs-border-width: 1px;
+  --vs-header: var(--vs-ink);
+  --vs-on-header: var(--vs-paper);
+  font-size: var(--vs-font-base);
+}
+
+:root[data-contrast='high'] {
+  --vs-paper: #000;
+  --vs-surface: #000;
+  --vs-mist: #000;
+  --vs-ink: #fff;
+  --vs-primary: #ffe066;
+  --vs-on-primary: #000;
+  --vs-line: #fff;
+  --vs-muted: #fff;
+  --vs-ok: #fff;
+  --vs-bad: #ffe066;
+  --vs-idle: #000;
+  --vs-cam: #000;
+  --vs-border-width: 3px;
+  --vs-header: #000;
+  --vs-on-header: #fff;
+  color-scheme: dark;
+}

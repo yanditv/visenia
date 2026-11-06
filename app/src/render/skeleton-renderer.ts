@@ -126,7 +126,7 @@ export class SkeletonRenderer {
       }
 
       this.drawConnections(landmarks.pose, activeConnections, '#38bdf8', 3, w, h);
-      this.drawPoints(landmarks.pose, '#0284c7', 5, w, h, [0, 11, 12, 13, 14, 15, 16]);
+      this.drawPoints(landmarks.pose, '#ffffff', 5, w, h, [0, 11, 12, 13, 14, 15, 16]);
 
       // Conexión anatómica continua: Codo -> Muñeca real (Landmark 0 de la mano)
       // Garantiza continuidad ósea y elimina líneas diagonales cruzadas sobre el torso
@@ -141,14 +141,14 @@ export class SkeletonRenderer {
 
     // 3. Renderizar Mano Izquierda
     if (landmarks.leftHand && landmarks.leftHand.length === 21) {
-      this.drawConnections(landmarks.leftHand, HAND_CONNECTIONS, '#4ade80', 2, w, h);
-      this.drawPoints(landmarks.leftHand, '#16a34a', 3.5, w, h);
+      this.drawConnections(landmarks.leftHand, HAND_CONNECTIONS, '#5eead4', 2, w, h);
+      this.drawPoints(landmarks.leftHand, '#ffffff', 3.5, w, h);
     }
 
     // 4. Renderizar Mano Derecha
     if (landmarks.rightHand && landmarks.rightHand.length === 21) {
-      this.drawConnections(landmarks.rightHand, HAND_CONNECTIONS, '#4ade80', 2, w, h);
-      this.drawPoints(landmarks.rightHand, '#16a34a', 3.5, w, h);
+      this.drawConnections(landmarks.rightHand, HAND_CONNECTIONS, '#5eead4', 2, w, h);
+      this.drawPoints(landmarks.rightHand, '#ffffff', 3.5, w, h);
     }
   }
 
