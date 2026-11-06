@@ -6,7 +6,7 @@
 **Versión de aplicación:** 0.1.0. **Base de implementación:** commit `5494f74`; rama de desarrollo `codex/RF-07-inicio-tematicas`; consultar el historial Git para el estado de su integración local.  
 **Objeto:** describir el funcionamiento técnico implementado, reconocer el lote documental existente y precisar qué se necesita de A para cargar referencias reales y continuar la evaluación automática.
 
-**Actualización:** incorpora la interfaz de doce temáticas y la verificación posterior de 34 pruebas aprobadas. Detalle de la entrega en el [informe de interfaz y verificación](2026-11-04-verificacion-interfaz-tematicas.md).
+**Actualización:** incorpora la interfaz de doce temáticas y la verificación posterior de 34 pruebas aprobadas.
 
 ## 1. Estado ejecutivo
 
@@ -227,9 +227,15 @@ Para el cierre del 15 de noviembre, priorizar lote real anotado, carga versionad
 
 - [Lote documental de cuarenta referencias](../datos/lote-1-lsec-conadis-2026-10-30.md).
 - [Inventario de fuentes en JSON](../datos/lote-1-lsec-conadis-2026-10-30.json).
-- [Plan actualizado de cierre del Sprint 1](../superpowers/plans/2026-11-04-cierre-sprint-1-lote-segmentado.md).
+
 - [ADR-001: formato de puntos](../adr/ADR-001-formato-puntos-clave.md).
 - [ADR-002: avatar VRM](../adr/ADR-002-retargeting-avatar-vrm.md).
 - ERS original revisado en esta conversación: `C:/Users/lvsld/Downloads/VISENA_ERS_v1.0_UCACUE.md`; sus metas no sustituyen evidencia de implementación.
 
 Informe actualizado mediante inspección y evidencias de la implementación local de temáticas. La actualización documental no añade cambios de producto ni modifica archivos o segmentación de A.
+
+## Verificación del inicio por temáticas
+
+La verificación del 4 de noviembre comprobó doce tarjetas, regreso al inicio, filtrado de Saludos y Cortesía, reproducción, temática vacía y espejo con simulación. Avatar y seguimiento cargaron con los recursos reales. Se revisó la vista móvil a 390 × 844 y la de escritorio. El permiso de cámara física quedó pendiente. Las 34 pruebas cubrieron, entre otros casos, permisos denegados, reintentos, cargas tardías y cancelación de sesiones.
+
+Para cerrar G1, A debe confirmar el estado del lote de cuarenta referencias, entregar primero una referencia completa por temática y luego el paquete versionado con IDs, unidades, tiempos, límites, parámetros y procedencia LSEC. La integración utiliza el esquema 1.1.0 y requiere la revisión del especialista. La evaluación automatizada y el objetivo de latencia corresponden a G2.

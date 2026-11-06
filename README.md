@@ -45,9 +45,7 @@ visenia/
 ├── data/
 │   └── schemas/          # JSON Schemas maestros: referencia y ejecución (ERS 6.1, 6.2)
 ├── deploy/               # Caddy (HTTPS local), FastAPI y PostgreSQL (Docker Compose ERS 3.4)
-├── docs/                 # ADRs arquitecturales (ERS 8.1) y manuales v1.0 (ERS 8.4)
-│   ├── adr/
-│   └── manuales/
+├── docs/                 # Decisiones, fuentes LSEC y estado técnico
 ├── server/               # Backend FastAPI + SQLModel para almacenamiento y exportación (RF-34, RF-37)
 └── .github/
     └── workflows/        # Pipelines de Integración Continua (CI)
@@ -71,7 +69,15 @@ bun run format:check
 
 ---
 
-## 5. Hoja de Ruta de Sprints y Puertas de Control
+## 5. Entrega Frontend-G0
+
+La PWA incluye doce temáticas, tres demostraciones, espejo, avatar VRM y anotación de referencias. El lote LSEC revisado y el motor de evaluación siguen pendientes de integración.
+
+- [Informe técnico consolidado](docs/informes/2026-11-04-estado-tecnico-y-dependencias-programador-a.md)
+- [Decisiones de arquitectura](docs/adr)
+- [Inventario de fuentes LSEC](docs/datos/lote-1-lsec-conadis-2026-10-30.md)
+
+## 6. Hoja de Ruta de Sprints y Puertas de Control
 
 | Fase         | Período         | Puerta de Control / Hito                                                  |
 | :----------- | :-------------- | :------------------------------------------------------------------------ |
