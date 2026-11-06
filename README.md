@@ -55,14 +55,30 @@ visenia/
 
 ---
 
-## 4. Hoja de Ruta de Sprints y Puertas de Control
+## 4. Desarrollo local
 
-| Fase | Período | Puerta de Control / Hito |
-| :--- | :--- | :--- |
-| **Semana 0** | 26 oct – 1 nov | Monorepo verificado, contratos de datos unificados e infraestructura base |
-| **Sprint 1** | 2 nov – 15 nov | **G1:** 40 referencias anotadas y catálogo con reproductor |
-| **Sprint 2** | 16 nov – 29 nov | **G2:** Una seña practicada de inicio a fin con veredicto ≤ 300 ms |
-| **Sprint 3** | 30 nov – 13 dic | **G3:** 4 unidades temáticas jugables con semáforo y gamificación |
-| **Sprint 4** | 14 dic – 27 dic | **G4:** Exactitud ≥ 75 % en piloto (~300 ejecuciones) y server API |
-| **Sprint 5** | 28 dic – 10 ene | **G5:** 120 señas jugables y modo kiosco estable durante 8 horas |
-| **Sprint 6** | 11 ene – 24 ene | **G6:** Entrega v1.0, auditoría RNF-14/17 y manuales oficiales |
+Instala Bun en la versión indicada por `packageManager` en `package.json` y Node.js 20, que CI utiliza para ejecutar las pruebas y las herramientas del frontend.
+
+Desde la raíz:
+
+```sh
+bun install --frozen-lockfile
+bun run --cwd app dev
+bun run test
+bun run build
+bun run format:check
+```
+
+---
+
+## 5. Hoja de Ruta de Sprints y Puertas de Control
+
+| Fase         | Período         | Puerta de Control / Hito                                                  |
+| :----------- | :-------------- | :------------------------------------------------------------------------ |
+| **Semana 0** | 26 oct – 1 nov  | Monorepo verificado, contratos de datos unificados e infraestructura base |
+| **Sprint 1** | 2 nov – 15 nov  | **G1:** 40 referencias anotadas y catálogo con reproductor                |
+| **Sprint 2** | 16 nov – 29 nov | **G2:** Una seña practicada de inicio a fin con veredicto ≤ 300 ms        |
+| **Sprint 3** | 30 nov – 13 dic | **G3:** 4 unidades temáticas jugables con semáforo y gamificación         |
+| **Sprint 4** | 14 dic – 27 dic | **G4:** Exactitud ≥ 75 % en piloto (~300 ejecuciones) y server API        |
+| **Sprint 5** | 28 dic – 10 ene | **G5:** 120 señas jugables y modo kiosco estable durante 8 horas          |
+| **Sprint 6** | 11 ene – 24 ene | **G6:** Entrega v1.0, auditoría RNF-14/17 y manuales oficiales            |
