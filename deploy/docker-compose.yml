@@ -4,8 +4,8 @@ services:
     container_name: visenia-caddy-proxy
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - '80:80'
+      - '443:443'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -27,7 +27,7 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - '8000:8000'
 
   db:
     image: postgres:16-alpine
@@ -38,11 +38,11 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-visenia_secret}
       POSTGRES_DB: ${POSTGRES_DB:-visenia_db}
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-visenia} -d ${POSTGRES_DB:-visenia_db}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-visenia} -d ${POSTGRES_DB:-visenia_db}']
       interval: 5s
       timeout: 5s
       retries: 5

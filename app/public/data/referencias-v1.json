@@ -26,11 +26,7 @@
         "tolerancia_grados": 20
       },
       "kinema_orientacion": {
-        "vector_palma": [
-          0,
-          0,
-          1
-        ],
+        "vector_palma": [0, 0, 1],
         "tolerancia_grados": 25
       },
       "toponema_ubicacion": {
@@ -14704,11 +14700,7 @@
         "tolerancia_grados": 20
       },
       "kinema_orientacion": {
-        "vector_palma": [
-          0,
-          0,
-          1
-        ],
+        "vector_palma": [0, 0, 1],
         "tolerancia_grados": 25
       },
       "toponema_ubicacion": {
@@ -27757,11 +27749,7 @@
         "tolerancia_grados": 20
       },
       "kinema_orientacion": {
-        "vector_palma": [
-          0,
-          0,
-          1
-        ],
+        "vector_palma": [0, 0, 1],
         "tolerancia_grados": 25
       },
       "toponema_ubicacion": {

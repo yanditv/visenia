@@ -1,7 +1,9 @@
 # Resumen Técnico y Ejecutivo: Semana 0 (Arranque y Contratos)
+
 **Proyecto Viseña (VISPROY)** — Fondo INVENTA  
-*Período: 26 de octubre – 1 de noviembre de 2026*  
-*Desarrollador B (Lucas) en coordinación con Desarrollador A (Mateo Pacheco)*
+_Período: 26 de octubre – 1 de noviembre de 2026_
+
+_Desarrollador B (Lucas) en coordinación con Desarrollador A (Mateo Pacheco)_
 
 ---
 
@@ -60,14 +62,14 @@ flowchart TD
 
 ## 3. Matriz Detallada de Entregables Desarrollados
 
-| # | Rama / PR | Requerimiento | Archivos Clave | Estado / Logro Técnico |
-|---|---|---|---|---|
-| **1** | `chore/s0-monorepo-ci-config`<br>(PR #1) | **RNF-15**<br>ERS 7.4 | `.github/workflows/ci.yml`<br>`package.json`<br>`.prettierrc` | Monorepo inicializado con npm workspaces (`app`), Prettier y pipeline de CI para validación de linter, formato y contratos JSON Schema. |
-| **2** | `feat/s0-data-schemas-contratos`<br>(PR #2 & PR #8) | **ERS 6.1, 6.2**<br>Tablas 6.1 y 6.2 | `data/schemas/referencia.schema.json`<br>`data/schemas/ejecucion.schema.json` | Contratos maestros blindados para catálogo y sesiones. Estructura unificada `$defs/FrameCaptura`. |
-| **3** | `chore/s0-docker-compose-lab`<br>(PR #3) | **ERS 3.4**<br>Tabla 3.3 | `deploy/docker-compose.yml`<br>`deploy/Caddyfile`<br>`server/main.py` | Entorno de laboratorio orquestado con Caddy (TLS local automático `tls internal`), backend FastAPI y base de datos PostgreSQL 16 con healthcheck. |
-| **4** | `feat/s0-pwa-camara-minima`<br>(PR #4, #7, #9) | **RF-01, RF-02**<br>RNF-11, RNF-12 | `app/index.html`<br>`app/src/main.ts`<br>`app/src/render/skeleton-renderer.ts`<br>`app/src/vision/vision-service.ts` | PWA Espejo de Señas a 60 FPS con aceleración GPU WebGL, caja de encuadre en vivo, controles accesibles $\ge 44\text{ px}$ y modo simulación sintética offline. |
-| **5** | `spike/s0-vrm-three-loader`<br>(PR #5) | **RF-42**<br>(Sec. 7) | `app/src/avatar/vrm-loader-spike.ts`<br>`app/package.json` | Spike técnico con Three.js y `@pixiv/three-vrm`, preparado para renderizado de anatomía humana, iluminación facial/manual y control de huesos normalizados (`VRMHumanBoneName`). |
-| **6** | `docs/s0-adr-iniciales`<br>(PR #6 & PR #8) | **ERS 8.1** | `docs/adr/ADR-001-formato-puntos-clave.md`<br>`docs/adr/ADR-002-retargeting-avatar-vrm.md`<br>`docs/adr/ADR-003-fuente-abstracta-camara.md` | Registros arquitecturales oficiales sobre formato de puntos, retargeting del avatar VRM, blendshapes faciales y abstracción de fuentes de video. |
+| #     | Rama / PR                                           | Requerimiento                        | Archivos Clave                                                                                                                              | Estado / Logro Técnico                                                                                                                                                           |
+| ----- | --------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | `chore/s0-monorepo-ci-config`<br>(PR #1)            | **RNF-15**<br>ERS 7.4                | `.github/workflows/ci.yml`<br>`package.json`<br>`.prettierrc`                                                                               | Monorepo inicializado con npm workspaces (`app`), Prettier y pipeline de CI para validación de linter, formato y contratos JSON Schema.                                          |
+| **2** | `feat/s0-data-schemas-contratos`<br>(PR #2 & PR #8) | **ERS 6.1, 6.2**<br>Tablas 6.1 y 6.2 | `data/schemas/referencia.schema.json`<br>`data/schemas/ejecucion.schema.json`                                                               | Contratos maestros blindados para catálogo y sesiones. Estructura unificada `$defs/FrameCaptura`.                                                                                |
+| **3** | `chore/s0-docker-compose-lab`<br>(PR #3)            | **ERS 3.4**<br>Tabla 3.3             | `deploy/docker-compose.yml`<br>`deploy/Caddyfile`<br>`server/main.py`                                                                       | Entorno de laboratorio orquestado con Caddy (TLS local automático `tls internal`), backend FastAPI y base de datos PostgreSQL 16 con healthcheck.                                |
+| **4** | `feat/s0-pwa-camara-minima`<br>(PR #4, #7, #9)      | **RF-01, RF-02**<br>RNF-11, RNF-12   | `app/index.html`<br>`app/src/main.ts`<br>`app/src/render/skeleton-renderer.ts`<br>`app/src/vision/vision-service.ts`                        | PWA Espejo de Señas a 60 FPS con aceleración GPU WebGL, caja de encuadre en vivo, controles accesibles $\ge 44\text{ px}$ y modo simulación sintética offline.                   |
+| **5** | `spike/s0-vrm-three-loader`<br>(PR #5)              | **RF-42**<br>(Sec. 7)                | `app/src/avatar/vrm-loader-spike.ts`<br>`app/package.json`                                                                                  | Spike técnico con Three.js y `@pixiv/three-vrm`, preparado para renderizado de anatomía humana, iluminación facial/manual y control de huesos normalizados (`VRMHumanBoneName`). |
+| **6** | `docs/s0-adr-iniciales`<br>(PR #6 & PR #8)          | **ERS 8.1**                          | `docs/adr/ADR-001-formato-puntos-clave.md`<br>`docs/adr/ADR-002-retargeting-avatar-vrm.md`<br>`docs/adr/ADR-003-fuente-abstracta-camara.md` | Registros arquitecturales oficiales sobre formato de puntos, retargeting del avatar VRM, blendshapes faciales y abstracción de fuentes de video.                                 |
 
 ---
 
@@ -80,7 +82,7 @@ A partir de las pruebas funcionales directas, se corrigieron 4 deficiencias de d
    - Sin `pose_world`, librerías como **Kalidokit** (`Kalidokit.Pose.solve(pose_world, pose)`) no pueden resolver los ángulos tridimensionales de hombros, codos y columna sin deformaciones proyectivas. Ambos esquemas ahora exigen este campo.
 2. **Optimización Facial con `blendshapes_rostro` (Prosoponema):**
    - Se descartó el almacenamiento masivo de los 478 puntos de la malla facial (que pesaría decenas de MB).
-   - Se adoptó el mapa de coeficientes ARKit/MediaPipe (0.0 a 1.0), lo que reduce el tamaño en un 95 %, permite modular directamente los *Shape Keys* de VRoid/Blender y asegura que en el Sprint 4 queden registradas las expresiones faciales de los participantes.
+   - Se adoptó el mapa de coeficientes ARKit/MediaPipe (0.0 a 1.0), lo que reduce el tamaño en un 95 %, permite modular directamente los _Shape Keys_ de VRoid/Blender y asegura que en el Sprint 4 queden registradas las expresiones faciales de los participantes.
 3. **Soporte para Poses Corregidas en Blender (`vrm_pose_override` — RF-42):**
    - En señas con manos cruzadas o dedos superpuestos donde la visión por computadora falla por auto-oclusión, el esquema permite inyectar cuaterniones $[x, y, z, w]$ exportados desde Blender (Sprint 5 / Lote 3).
 4. **Zonas Anatómicas para Resaltado de Errores (`zonas_resaltar` — RF-20):**
@@ -93,25 +95,25 @@ A partir de las pruebas funcionales directas, se corrigieron 4 deficiencias de d
 ```mermaid
 flowchart LR
     CAM["Cámara Web<br/>(60 FPS)"] --> VS["VisionService (GPU)"]
-    
+
     subgraph MP["Modelos Locales MediaPipe (.task)"]
         PL["pose_landmarker.task<br/>(5.77 MB)"]
         HL["hand_landmarker.task<br/>(7.81 MB)"]
         FL["face_landmarker.task<br/>(3.75 MB)"]
     end
-    
+
     VS --> PL
     VS --> HL
     VS --> FL
-    
+
     PL --> OUT_P["pose (2D) + pose_world (3D)"]
     HL --> OUT_H["mano_derecha + mano_izquierda (21 pts)"]
     FL --> OUT_F["blendshapes_rostro + contorno"]
-    
+
     OUT_P --> SR["SkeletonRenderer (Canvas 2D)"]
     OUT_H --> SR
     OUT_F --> SR
-    
+
     OUT_P -.-> VRM["VrmAvatarViewer (Three.js 3D)"]
     OUT_F -.-> VRM
 ```
