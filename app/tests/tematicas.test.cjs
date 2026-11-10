@@ -31,14 +31,17 @@ test('entrar carga los tres recursos y filtra HOLA; Cortesía contiene GRACIAS y
   assert.deepEqual([app.counts.avatar, app.counts.vision, app.counts.camera], [1, 1, 2]);
 });
 
-test('temática vacía abre la vista compartida sin presentar demos de otra temática', async () => {
+test('temática vacía muestra niveles inhabilitados sin abrir cámara ni avatar', async () => {
   const app = boot();
   await flush();
   await app.card(2).click();
-  assert.equal(app.element('practice-view').hidden, false);
-  assert.equal(app.element('select-catalogo-sena').disabled, true);
-  assert.equal(app.element('btn-player-play').disabled, true);
-  assert.match(app.element('catalogo-notice').textContent, /sin referencias/i);
+  assert.equal(app.element('map-view').hidden, false);
+  assert.equal(app.element('btn-start-level').disabled, true);
+  assert.equal(
+    app.element('level-path').children.every((item) => item.children[0].disabled),
+    true
+  );
+  assert.equal(app.counts.camera + app.counts.avatar + app.counts.vision, 0);
 });
 
 test('cámara denegada conserva el avatar y el catálogo y permite reintentar', async () => {
@@ -69,14 +72,14 @@ test('salir durante la carga y reingresar no reactiva recursos de la sesión ant
   await flush();
   const first = app.card(1).click();
   await app.element('btn-volver-tematicas').click();
-  const second = app.card(2).click();
+  const second = app.card(12).click();
   avatar.resolve();
   vision.resolve();
   camera.resolve();
   await Promise.all([first, second]);
   assert.equal(app.counts.avatar, 1);
   assert.equal(app.counts.vision, 1);
-  assert.equal(app.element('practice-title').textContent, 'Familia');
+  assert.equal(app.element('practice-title').textContent, 'Cortesía');
   await app.element('btn-volver-tematicas').click();
   assert.equal(app.running(), false);
   assert.equal(app.counts.renders, 0);
@@ -100,7 +103,8 @@ test('fallo del avatar admite reintento sin reiniciar cámara ni MediaPipe', asy
 test('fallo del catálogo se muestra sin bloquear el espejo', async () => {
   const app = boot({ catalogError: true });
   await flush();
-  await app.card(1).click();
+  await app.element('tab-practica').click();
+  await flush();
   assert.match(app.element('catalogo-notice').textContent, /no se pudo cargar/i);
   assert.equal(app.running(), true);
   assert.equal(app.element('btn-player-play').disabled, true);
@@ -141,10 +145,59 @@ test('el catálogo tardío conserva el modo espejo elegido durante la descarga',
   const catalog = deferred();
   const app = boot({ catalog: () => catalog.promise });
   await flush();
-  await app.card(2).click();
+  await app.element('tab-practica').click();
+  await flush();
   app.element('btn-mode-espejo').click();
   assert.equal(app.element('btn-mode-espejo').attributes['aria-pressed'], 'true');
   catalog.resolve();
   await flush();
   assert.equal(app.element('btn-mode-espejo').attributes['aria-pressed'], 'true');
+});
+test('un fotograma detenido libera el espejo y el avatar y no repite inferencia', async () => {
+  const landmarks = { pose: [{ x: 0.4, y: 0.5, z: 0 }] };
+  const app = boot({ detect: () => ({ landmarks, encuadreValido: true }) });
+  await flush();
+  await app.card(1).click();
+  app.element('btn-mode-espejo').click();
+  app.element('webcam-video').currentTime = 1;
+  app.frame(100);
+  assert.equal(app.poses.at(-1), landmarks);
+  app.frame(500);
+  assert.deepEqual(app.poses.at(-1), {});
+  assert.equal(app.counts.detections, 1);
+});
+test('el mapa solo inicia recursos al comenzar un nivel cargado y conserva su selección', async () => {
+  const app = boot();
+  await flush();
+  app.theme(12).click();
+  assert.equal(app.element('map-view').hidden, false);
+  assert.deepEqual([app.counts.avatar, app.counts.vision, app.counts.camera], [0, 0, 0]);
+  const nodes = app.element('level-path').children.map((item) => item.children[0]);
+  assert.deepEqual(
+    nodes.map((node) => node.disabled),
+    [false, false, true, true, true, true]
+  );
+  nodes[1].click();
+  assert.equal(app.element('level-title').textContent, 'POR FAVOR');
+  await app.element('btn-start-level').click();
+  assert.equal(app.element('select-catalogo-sena').value, 'ref-por-favor');
+  app.element('btn-volver-tematicas').click();
+  assert.equal(app.element('map-view').hidden, false);
+  assert.equal(app.element('level-title').textContent, 'POR FAVOR');
+  assert.equal(app.running(), false);
+  assert.equal(app.raf.size, 0);
+  app.element('btn-map-home').click();
+  assert.equal(app.element('home-view').hidden, false);
+});
+
+test('el mapa actualiza los niveles cuando el catálogo llega tarde', async () => {
+  const catalog = deferred();
+  const app = boot({ catalog: () => catalog.promise });
+  app.theme(1).click();
+  assert.equal(app.element('btn-start-level').disabled, true);
+  catalog.resolve();
+  await flush();
+  assert.equal(app.element('btn-start-level').disabled, false);
+  assert.equal(app.element('level-title').textContent, 'HOLA');
+  assert.deepEqual([app.counts.avatar, app.counts.vision, app.counts.camera], [0, 0, 0]);
 });

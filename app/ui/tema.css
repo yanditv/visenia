@@ -20,15 +20,24 @@
 }
 
 :root {
-  --vs-ink: #14213d;
-  --vs-primary: #2f4fd8;
+  --vs-ink: #18223f;
+  --vs-primary: #3347d6;
   --vs-on-primary: #fff;
-  --vs-mist: #e3e9ff;
-  --vs-sun: #f5b83d;
-  --vs-paper: #f7f5ef;
+  --vs-mist: #e4e8fa;
+  --vs-sun: #f5c842;
+  --vs-paper: #f6f4ef;
   --vs-surface: #fff;
-  --vs-line: #d9d5c8;
-  --vs-muted: #4a5270;
+  --vs-line: #e6e2d8;
+  --vs-muted: #4b5675;
+  --vs-brand-dark: #2234a8;
+  --vs-success-soft: #ddf6ea;
+  --vs-coral: #ff7a59;
+  --vs-magenta: #e04fa0;
+  --vs-teal: #19b5c9;
+  --vs-violet: #7b4fe0;
+  --vs-locked: #c9ccd6;
+  --vs-locked-dark: #a9aebc;
+  --vs-danger-soft: #ffe1e1;
   --vs-ok: #17724a;
   --vs-warn: var(--vs-sun);
   --vs-bad: #b42318;
@@ -38,7 +47,7 @@
   --vs-joint: #fff;
   --vs-error-ring: var(--vs-sun);
   --vs-font-base: 18px;
-  --vs-tap: 44px;
+  --vs-tap: 48px;
   --vs-border-width: 1px;
   --vs-header: var(--vs-ink);
   --vs-on-header: var(--vs-paper);

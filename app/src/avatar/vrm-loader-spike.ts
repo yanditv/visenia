@@ -35,6 +35,7 @@ export class VrmAvatarViewer {
   private resizeObserver: ResizeObserver;
 
   private overrideBones = new Set<string>();
+  private frameScale = 1;
 
   // Estado dinámico de landmarks recibidos
   private latestLandmarks: HolisticFrameLandmarks | null = null;
@@ -155,6 +156,7 @@ export class VrmAvatarViewer {
       this.animationFrame = requestAnimationFrame(animate);
 
       const delta = this.clock.getDelta();
+      this.frameScale = Math.min(Math.max(delta, 0), 0.1) * 60;
       const elapsed = this.clock.getElapsedTime();
 
       if (this.currentVrm) {
@@ -338,7 +340,7 @@ export class VrmAvatarViewer {
         wrist.parent.updateWorldMatrix(true, false);
         target.premultiply(wrist.parent.getWorldQuaternion(new THREE.Quaternion()).invert());
       }
-      wrist.quaternion.slerp(target, 0.35);
+      wrist.quaternion.slerp(target, 1 - Math.pow(1 - 0.35, this.frameScale ?? 1));
     }
     const angle = (a: number, b: number, c: number) => {
       const incoming = vector(a, b),
@@ -436,7 +438,7 @@ export class VrmAvatarViewer {
     if (!this.currentVrm) return;
     const node = this.currentVrm.humanoid.getNormalizedBoneNode(boneName);
     if (!node) return;
-    node.quaternion.slerp(targetQuat, lerpAmount);
+    node.quaternion.slerp(targetQuat, 1 - Math.pow(1 - lerpAmount, this.frameScale ?? 1));
   }
 
   /**

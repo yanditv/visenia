@@ -16,7 +16,7 @@ exports.deferred = () => {
 exports.flush = () => new Promise((resolve) => setImmediate(resolve));
 exports.boot = (options = {}) => {
   const elements = new Map(),
-    counts = { avatar: 0, vision: 0, camera: 0, stops: 0, renders: 0 };
+    counts = { avatar: 0, vision: 0, camera: 0, stops: 0, renders: 0, detections: 0 };
   const poses = [],
     raf = new Map();
   let frameId = 0,
@@ -51,6 +51,18 @@ exports.boot = (options = {}) => {
           return yes;
         },
       },
+      closest: (selector) => element(selector),
+      querySelectorAll(selector) {
+        return this.children
+          .flatMap((c) => [c, ...c.children])
+          .filter((c) => c.className === selector.slice(1));
+      },
+      removeAttribute(name) {
+        delete this.attributes[name];
+      },
+      append(...children) {
+        this.children.push(...children);
+      },
       setAttribute(name, value) {
         this.attributes[name] = value;
       },
@@ -76,7 +88,8 @@ exports.boot = (options = {}) => {
         this.focused = true;
       },
       click() {
-        return this.listeners.click?.();
+        if (this.disabled) return;
+        return this.onclick?.() ?? this.listeners.click?.();
       },
     };
   }
@@ -125,7 +138,10 @@ exports.boot = (options = {}) => {
     getReadyStatus() {
       return ready;
     }
+    resetTracking() {}
     detect() {
+      counts.detections++;
+      if (options.detect) return options.detect();
       return { landmarks: {}, encuadreValido: false };
     }
   }
@@ -152,6 +168,7 @@ exports.boot = (options = {}) => {
     }
   }
   const modules = {
+    '../ui/mapa': load('ui/mapa.ts'),
     '../i18n/es-EC/mensajes': require('./load-ts.cjs')('i18n/es-EC/mensajes.ts'),
     './camera/camera-service': { CameraService: Camera },
     './vision/vision-service': { VisionService: Vision },
@@ -190,7 +207,21 @@ exports.boot = (options = {}) => {
     counts,
     poses,
     raf,
-    card: (unit) => element('tematicas-grid').children.find((x) => x.dataset.unit === String(unit)),
+    theme: (unit) =>
+      element('tematicas-grid').children.find((x) => x.dataset.unit === String(unit)),
+    card: (unit) => ({
+      click() {
+        element('tematicas-grid')
+          .children.find((x) => x.dataset.unit === String(unit))
+          .click();
+        return element('btn-start-level').click();
+      },
+    }),
     running: () => running,
+    frame: (time) => {
+      const [id, callback] = raf.entries().next().value;
+      raf.delete(id);
+      callback(time);
+    },
   };
 };

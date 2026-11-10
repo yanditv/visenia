@@ -84,3 +84,27 @@ export const mensajes = {
   ) =>
     `Ubicación: ${ubicacion} • Movimiento: ${movimiento} • Forma: ${forma} • Palma: ${palma} • Expresión: ${expresion ? 'requerida' : 'neutra'}`,
 };
+export const mapa = {
+  unidad: (unit: number) => 'UNIDAD ' + String(unit).padStart(2, '0'),
+  nivel: (level: number) => 'NIVEL ' + level,
+  disponibles: (count: number) =>
+    count === 1 ? '1 nivel disponible' : count + ' niveles disponibles',
+  etiqueta: (level: number, glosa?: string) =>
+    glosa
+      ? 'Nivel ' + level + ', ' + glosa + ', disponible'
+      : 'Nivel ' + level + ', próximamente, inhabilitado',
+  sinNiveles: 'Estamos preparando esta temática',
+  proximamenteDescripcion: 'Los niveles se habilitarán cuando sus referencias estén cargadas.',
+  demostracion:
+    'Observa y practica con una demostración. Su ejecución está pendiente de revisión especializada.',
+  observa: 'Observa la referencia con el avatar y practica en tu espejo.',
+  proximamente: 'Próximamente',
+  disponible: '● Disponible',
+  inhabilitado: '🔒 Inhabilitado',
+  pendiente: 'REFERENCIAS PENDIENTES',
+  verMapa: 'Ver niveles →',
+  proximo: 'Ver próximos niveles →',
+  modoGuia: 'Avatar guía · Reproduce la referencia seleccionada',
+  modoEspejo: 'Reflejo en vivo · Sigue tus movimientos',
+  velocidad: (speed: number) => 'Velocidad ' + speed.toLocaleString('es-EC') + '×',
+};

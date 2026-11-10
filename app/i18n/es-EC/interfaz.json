@@ -70,7 +70,7 @@
   "esqueleto_de_la_sena_del_catalogo": "Esqueleto de la seña del catálogo",
   "esqueleto_de_referencia": "Esqueleto de referencia",
   "reproducir": "▶ Reproducir",
-  "alternar_velocidad_normal_y_lenta_1x": "Alternar velocidad normal y lenta (1x / 0.5x)",
+  "alternar_velocidad_normal_y_lenta_1x": "Alternar velocidad: 1×, 0,75× y 0,5×",
   "1_0": "1.0×",
   "posicion_en_la_sena_de_referencia": "Posición en la seña de referencia",
   "0_0": "0/0",
@@ -120,5 +120,12 @@
   "torso_pose": "Torso / Pose",
   "manos_21_pts": "Manos (21 pts)",
   "rostro": "Rostro",
-  "visena_lengua_de_senas_ecuatoriana_universidad": "Viseña · Lengua de Señas Ecuatoriana · Universidad Católica de Cuenca · Fondo INVENTA"
+  "visena_lengua_de_senas_ecuatoriana_universidad": "Viseña · Lengua de Señas Ecuatoriana · Universidad Católica de Cuenca · Fondo INVENTA",
+  "mapa_volver": "← Temáticas",
+  "mapa_cabecera": "Tu camino de aprendizaje",
+  "mapa_camino": "Niveles de la temática",
+  "mapa_comenzar": "Comenzar nivel →",
+  "mapa_ayuda": "Elige un nivel disponible. El resto se habilitará al incorporar las referencias.",
+  "volver_al_mapa": "← Volver al mapa",
+  "cerrar_nivel": "Cerrar nivel"
 }

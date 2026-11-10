@@ -8,7 +8,8 @@
  *  - Catálogo y reproductor: reproduce señas de referencia a 1x y 0.5x
  *  - Anotador fonológico: captura, segmentación y exportación de referencias JSON schema v1.1.0
  */
-import { mensajes, themes } from '../i18n/es-EC/mensajes';
+import { mapa, mensajes, themes } from '../i18n/es-EC/mensajes';
+import { renderLevelMap } from '../ui/mapa';
 import { CameraService } from './camera/camera-service';
 import { SkeletonRenderer, HolisticFrameLandmarks } from './render/skeleton-renderer';
 import { VisionService } from './vision/vision-service';
@@ -34,6 +35,13 @@ const catalogNotice = document.getElementById('catalogo-notice') as HTMLElement;
 const retryResources = document.getElementById('btn-retry-resources') as HTMLButtonElement;
 const retryCatalog = document.getElementById('btn-retry-catalog') as HTMLButtonElement;
 const backToThemes = document.getElementById('btn-volver-tematicas') as HTMLButtonElement;
+const mapView = document.getElementById('map-view')!;
+mapView.hidden = true;
+const mapTitle = document.getElementById('map-title')!;
+const mapRetry = document.getElementById('btn-retry-levels')!;
+const avatarSource = document.getElementById('avatar-source')!;
+let mapUnit: number | null = null;
+let catalogLoading = true;
 
 // ─── Referencias del DOM: Catálogo y Reproductor ────────────────────────────
 const selectCatalogoSena = document.getElementById('select-catalogo-sena') as HTMLSelectElement;
@@ -109,6 +117,11 @@ function resourceStatus(name: string, message: string, state: 'loading' | 'ready
   if (state === 'error') loadErrors.add(name);
   else loadErrors.delete(name);
   retryResources.hidden = loadErrors.size === 0;
+  document.querySelector<HTMLElement>('.resource-panel')!.dataset.ready = String(
+    ['avatar', 'vision', 'camera'].every(
+      (resource) => document.getElementById(`load-${resource}`)!.dataset.state === 'ready'
+    )
+  );
 }
 
 function renderThemes(): void {
@@ -120,6 +133,7 @@ function renderThemes(): void {
     card.dataset.unit = String(index + 1);
     const refs = catalogoService.getCatalog(index + 1);
     const demo = refs.length > 0 && refs.every((s) => catalogoService.isDemo(s));
+    card.dataset.available = String(refs.length > 0);
     for (const [className, text] of [
       ['theme-icon', icon],
       ['theme-number', mensajes.unidad(String(index + 1).padStart(2, '0'))],
@@ -131,7 +145,7 @@ function renderThemes(): void {
           ? `${refs.length} ${demo ? (refs.length === 1 ? mensajes.demostracion : mensajes.demostraciones) : refs.length === 1 ? mensajes.sena : mensajes.senas}`
           : mensajes.referenciaPendiente,
       ],
-      ['theme-action', mensajes.explorarTema],
+      ['theme-action', refs.length ? mapa.verMapa : mapa.proximo],
     ]) {
       const span = document.createElement('span');
       span.className = className;
@@ -139,7 +153,7 @@ function renderThemes(): void {
       if (className === 'theme-icon') span.setAttribute('aria-hidden', 'true');
       card.appendChild(span);
     }
-    card.addEventListener('click', () => enterTheme(index + 1));
+    card.addEventListener('click', () => showMap(index + 1));
     themesGrid.appendChild(card);
   });
 }
@@ -184,10 +198,45 @@ function refreshSelectedCatalog(): void {
 }
 
 async function loadCatalog(): Promise<void> {
+  catalogLoading = true;
   await catalogoService.loadCatalog();
+  catalogLoading = false;
   renderThemes();
   refreshSelectedCatalog();
+  if (mapUnit !== null && activeUnit === null) showMap(mapUnit, false);
 }
+
+function showMap(unit: number, focus = true): void {
+  mapUnit = unit;
+  homeView.hidden = true;
+  practiceView.hidden = true;
+  mapView.hidden = false;
+  renderLevelMap(
+    document,
+    unit,
+    catalogoService.getCatalog(unit),
+    (reference) => catalogoService.isDemo(reference),
+    (referenceId) => enterTheme(unit, referenceId),
+    catalogoService.getSelectedSena()?.id
+  );
+  mapRetry.hidden = catalogLoading || catalogoService.getIsLoaded();
+  if (focus) mapTitle.focus();
+}
+
+document.getElementById('btn-map-home')!.addEventListener('click', () => {
+  mapUnit = null;
+  mapView.hidden = true;
+  homeView.hidden = false;
+  themesGrid.focus();
+});
+mapRetry.addEventListener('click', async () => {
+  mapRetry.setAttribute('disabled', '');
+  try {
+    await loadCatalog();
+  } finally {
+    mapRetry.removeAttribute('disabled');
+  }
+});
 renderThemes();
 void loadCatalog();
 retryCatalog.addEventListener('click', async () => {
@@ -252,6 +301,9 @@ async function startCamera(id: number): Promise<void> {
     if (cameraLoad) await cameraLoad.catch(() => {});
     if (!currentSession(id) || request !== cameraRequest) return;
     if (!cameraService.isRunning()) {
+      visionService.resetTracking();
+      lastVideoTime = -1;
+      lastDetection = { landmarks: {}, encuadreValido: false };
       cameraLoad = cameraService.start().finally(() => {
         cameraLoad = null;
       });
@@ -266,7 +318,7 @@ async function startCamera(id: number): Promise<void> {
     btnToggleCamera.textContent = mensajes.apagarCamara;
     resourceStatus('camera', mensajes.camaraActiva, 'ready');
     statusDisplay.textContent = mensajes.camaraActiva;
-    statusDisplay.className = 'status-indicator ready';
+    statusDisplay.className = 'status-indicator camera-status ready';
   } catch (error) {
     if (!currentSession(id) || request !== cameraRequest) return;
     resourceStatus(
@@ -276,7 +328,7 @@ async function startCamera(id: number): Promise<void> {
     );
     btnToggleCamera.textContent = mensajes.reintentarCamara;
     statusDisplay.textContent = mensajes.camaraNoDisponible;
-    statusDisplay.className = 'status-indicator error';
+    statusDisplay.className = 'status-indicator camera-status error';
   } finally {
     if (currentSession(id) && request === cameraRequest) btnToggleCamera.disabled = false;
   }
@@ -286,20 +338,26 @@ async function prepareResources(id: number): Promise<void> {
   await Promise.all([prepareAvatar(id), prepareVision(id), startCamera(id)]);
 }
 
-async function enterTheme(unit: number): Promise<void> {
+async function enterTheme(unit: number, referenceId?: string): Promise<void> {
   if (activeUnit !== null) return;
   activeUnit = unit;
   avatarDisplayMode = 'guia';
   const id = ++sessionId;
   homeView.hidden = true;
+  mapView.hidden = true;
   practiceView.hidden = false;
   practiceTitle.textContent = themes[unit - 1][0];
   statusDisplay.textContent = mensajes.preparandoPractica;
-  statusDisplay.className = 'status-indicator';
+  statusDisplay.className = 'status-indicator camera-status';
   practiceTitle.focus();
   selectUnidad.value = String(unit);
   lastTimestamp = performance.now();
   refreshSelectedCatalog();
+  if (referenceId) {
+    catalogoService.selectSena(referenceId);
+    selectCatalogoSena.value = referenceId;
+    updateFonologiaDisplay();
+  }
   animationFrame = requestAnimationFrame(animationLoop);
   await prepareResources(id);
 }
@@ -321,7 +379,7 @@ backToThemes.addEventListener('click', () => {
   frameCount = 0;
   fpsDisplay.textContent = mensajes.fpsInicial;
   statusDisplay.textContent = mensajes.elegirTema;
-  statusDisplay.className = 'status-indicator';
+  statusDisplay.className = 'status-indicator camera-status';
   btnToggleSynthetic.textContent = mensajes.activarSimulacion;
   renderer.clear();
   encuadreBox?.classList.remove('valido');
@@ -331,8 +389,7 @@ backToThemes.addEventListener('click', () => {
   tabPractica.classList.add('active');
   tabAnotador.classList.remove('active');
   practiceView.hidden = true;
-  homeView.hidden = false;
-  themesGrid.focus();
+  showMap(mapUnit ?? 1);
 });
 retryResources.addEventListener('click', () => prepareResources(sessionId));
 
@@ -380,10 +437,11 @@ btnPlayerPlay.addEventListener('click', () => {
 
 btnPlayerSpeed.addEventListener('click', () => {
   const currentSpeed = catalogoService.getSpeed();
-  const nextSpeed = currentSpeed === 1.0 ? 0.5 : 1.0;
+  const speeds = [1, 0.75, 0.5];
+  const nextSpeed = speeds[(speeds.indexOf(currentSpeed) + 1) % speeds.length];
   catalogoService.setSpeed(nextSpeed);
-  btnPlayerSpeed.textContent = `${nextSpeed.toFixed(1)}×`;
-  btnPlayerSpeed.title = nextSpeed === 0.5 ? mensajes.velocidadLenta : mensajes.velocidadNormal;
+  btnPlayerSpeed.textContent = `${nextSpeed.toLocaleString('es-EC')}×`;
+  btnPlayerSpeed.title = mapa.velocidad(nextSpeed);
 });
 
 sliderPlayerProgress.addEventListener('input', () => {
@@ -413,6 +471,9 @@ btnPlayerRestart.addEventListener('click', () => {
 function setAvatarDisplayMode(mode: 'guia' | 'espejo'): void {
   avatarDisplayMode = mode;
   avatarViewer?.resetPose();
+  avatarSource.textContent = mode === 'guia' ? mapa.modoGuia : mapa.modoEspejo;
+  document.getElementById('reference-skeleton-canvas')!.closest('figure')!.hidden =
+    mode === 'espejo';
   btnModeGuia.classList[mode === 'guia' ? 'add' : 'remove']('active');
   btnModeEspejo.classList[mode === 'espejo' ? 'add' : 'remove']('active');
   btnModeGuia.setAttribute('aria-pressed', String(mode === 'guia'));
@@ -434,15 +495,26 @@ let lastTimestamp = performance.now();
 let frameCount = 0;
 let currentFps = 0;
 let lastVideoTime = -1;
+let lastDetectionAt = -Infinity;
 let lastDetection: ReturnType<VisionService['detect']> = { landmarks: {}, encuadreValido: false };
 
 // ─── Ajuste dinámico del canvas del espejo ───────────────────────────────────
 function syncCanvasSize() {
+  const overlay = document.querySelector<HTMLElement>('.encuadre-overlay')!;
   if (video.videoWidth && video.videoHeight) {
     renderer.resize(video.videoWidth, video.videoHeight);
+    const width = video.clientWidth;
+    const height = video.clientHeight;
+    if (width && height) {
+      const scale = Math.min(width / video.videoWidth, height / video.videoHeight);
+      overlay.style.width = `${(video.videoWidth * scale * 100) / width}%`;
+      overlay.style.height = `${(video.videoHeight * scale * 100) / height}%`;
+    }
   } else {
     const rect = canvas.getBoundingClientRect();
     renderer.resize(rect.width, rect.height);
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
   }
 }
 
@@ -473,6 +545,11 @@ function animationLoop(timestamp: number) {
         freshFrame = true;
         lastDetection = visionService.detect(video, timestamp);
         lastVideoTime = video.currentTime;
+        lastDetectionAt = timestamp;
+      }
+      if (timestamp - lastDetectionAt > 250) {
+        lastDetection = { landmarks: {}, encuadreValido: false };
+        visionService.resetTracking();
       }
       const detection = lastDetection;
       userLandmarks = detection.landmarks;
@@ -547,7 +624,7 @@ btnToggleCamera.addEventListener('click', async () => {
     btnToggleCamera.textContent = mensajes.encenderCamara;
     resourceStatus('camera', mensajes.camaraDetenida, 'ready');
     statusDisplay.textContent = mensajes.camaraDetenida;
-    statusDisplay.className = 'status-indicator';
+    statusDisplay.className = 'status-indicator camera-status';
   } else {
     await Promise.all([prepareVision(sessionId), startCamera(sessionId)]);
   }
@@ -564,18 +641,18 @@ btnToggleSynthetic.addEventListener('click', () => {
   if (isSimulating) {
     btnToggleSynthetic.textContent = mensajes.detenerSimulacion;
     statusDisplay.textContent = mensajes.simulacionActiva;
-    statusDisplay.className = 'status-indicator ready';
+    statusDisplay.className = 'status-indicator camera-status ready';
   } else {
     btnToggleSynthetic.textContent = mensajes.activarSimulacion;
     statusDisplay.textContent = mensajes.espera;
-    statusDisplay.className = 'status-indicator';
+    statusDisplay.className = 'status-indicator camera-status';
     renderer.clear();
   }
 });
 
 // ─── Lógica de Navegación Tabs & Drawer Anotador ──────────────────────────────
 tabPractica.addEventListener('click', () => {
-  if (activeUnit === null) void enterTheme(1);
+  if (activeUnit === null) void enterTheme(mapUnit ?? 1);
   tabPractica.classList.add('active');
   tabAnotador.classList.remove('active');
   anotadorDrawer.classList.add('oculto');
@@ -584,7 +661,7 @@ tabPractica.addEventListener('click', () => {
 });
 
 tabAnotador.addEventListener('click', () => {
-  if (activeUnit === null) void enterTheme(1);
+  if (activeUnit === null) void enterTheme(mapUnit ?? 1);
   tabAnotador.classList.add('active');
   tabPractica.classList.remove('active');
   anotadorDrawer.classList.remove('oculto');

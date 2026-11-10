@@ -238,3 +238,50 @@ test('encuadre no es válido sin rostro y ambas manos durante un segundo', () =>
   const r = v.detect({ readyState: 2 }, 2000);
   assert.equal(r.encuadreValido, false);
 });
+test('el encuadre requiere un segundo continuo y reinicia al interrumpir el vídeo', () => {
+  const v = detector([hand(0.2), hand(0.8)]);
+  v.faceLandmarker = {
+    detectForVideo: () => ({
+      faceLandmarks: [Array.from({ length: 478 }, () => point(0.5, 0.4))],
+    }),
+  };
+  const video = { readyState: 2, videoWidth: 640, videoHeight: 480 };
+  assert.equal(v.detect(video, 0).encuadreValido, false);
+  for (let time = 100; time <= 1000; time += 100) v.detect(video, time);
+  assert.equal(v.detect(video, 1100).encuadreValido, true);
+  v.detect({ ...video, readyState: 0 }, 1150);
+  assert.equal(v.detect(video, 1200).encuadreValido, false);
+  assert.equal(v.detect(video, 5000).encuadreValido, false);
+});
+test('la respuesta del brazo depende del tiempo y conserva su velocidad a 30 y 120 fps', (t) => {
+  let scheduled;
+  global.requestAnimationFrame = (callback) => {
+    scheduled = callback;
+    return 1;
+  };
+  global.cancelAnimationFrame = () => {};
+  t.after(() => {
+    delete global.requestAnimationFrame;
+    delete global.cancelAnimationFrame;
+  });
+  function sample(fps) {
+    const { v, bones } = rig();
+    v.clock = { start() {}, getDelta: () => 1 / fps, getElapsedTime: () => 0 };
+    v.renderer = { render() {} };
+    v.currentVrm.update = () => {};
+    v.latestLandmarks = { pose: pose() };
+    v.start();
+    for (let frame = 1; frame < fps / 10; frame++) scheduled();
+    const result = bones.get('rightUpperArm').quaternion.clone();
+    v.stop();
+    return result;
+  }
+  assert.ok(sample(30).angleTo(sample(120)) < 1e-6);
+});
+test('la simulación y su pose métrica conservan la misma dirección vertical', () => {
+  const { SkeletonRenderer } = load('src/render/skeleton-renderer.ts');
+  const frame = Object.create(SkeletonRenderer.prototype).generateSyntheticPose(0);
+  const imageDirection = frame.pose[13].y - frame.pose[11].y;
+  const worldDirection = frame.poseWorld[13].y - frame.poseWorld[11].y;
+  assert.ok(imageDirection * worldDirection > 0);
+});

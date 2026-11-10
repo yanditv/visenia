@@ -34,6 +34,7 @@ export class VisionService {
   private handLandmarker: HandLandmarker | null = null;
   private faceLandmarker: FaceLandmarker | null = null;
   private framingSince: number | null = null;
+  private lastTimestamp: number | null = null;
   private previousHands: { left?: LandmarkPoint; right?: LandmarkPoint } = {};
   private isInitializing: boolean = false;
   private isReady: boolean = false;
@@ -150,8 +151,11 @@ export class VisionService {
     encuadreValido: boolean;
   } {
     if (!this.isReady || !video || video.readyState < 2) {
+      this.resetTracking();
       return { landmarks: {}, encuadreValido: false };
     }
+    if (this.lastTimestamp !== null && timestamp - this.lastTimestamp > 250) this.resetTracking();
+    this.lastTimestamp = timestamp;
 
     const result: HolisticFrameLandmarks = {
       imageAspect: video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : 1,
@@ -278,5 +282,11 @@ export class VisionService {
 
   public getReadyStatus(): boolean {
     return this.isReady;
+  }
+
+  public resetTracking(): void {
+    this.framingSince = null;
+    this.lastTimestamp = null;
+    this.previousHands = {};
   }
 }

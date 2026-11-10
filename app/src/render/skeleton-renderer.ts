@@ -251,7 +251,7 @@ export class SkeletonRenderer {
 
     const poseWorld: LandmarkPoint[] = pose.map((pt) => ({
       x: (pt.x - 0.5) * 1.5,
-      y: (0.5 - pt.y) * 1.5,
+      y: (pt.y - 0.5) * 1.5,
       z: 0.0,
       visibility: pt.visibility,
     }));

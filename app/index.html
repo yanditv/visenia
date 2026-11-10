@@ -19,19 +19,21 @@
 
         <details class="advanced-tools">
           <summary>{{herramientas}}</summary>
-          <nav class="nav-tabs" aria-label="{{herramientas_de_practica}}">
-            <button id="tab-practica" class="tab-btn active">{{espacio_de_practica}}</button>
-            <button
-              id="tab-anotador"
-              class="tab-btn"
-              aria-controls="anotador-drawer"
-              aria-expanded="false"
-            >
-              {{anotar_referencias}}
-            </button>
-          </nav>
-          <div class="hud-stats">
-            <span id="fps-display">{{fps}}</span><span id="preferred-hand-display"></span>
+          <div class="tool-fields">
+            <nav class="nav-tabs" aria-label="{{herramientas_de_practica}}">
+              <button id="tab-practica" class="tab-btn active">{{espacio_de_practica}}</button>
+              <button
+                id="tab-anotador"
+                class="tab-btn"
+                aria-controls="anotador-drawer"
+                aria-expanded="false"
+              >
+                {{anotar_referencias}}
+              </button>
+            </nav>
+            <div class="hud-stats">
+              <span id="fps-display">{{fps}}</span><span id="preferred-hand-display"></span>
+            </div>
           </div>
         </details>
 
@@ -94,11 +96,47 @@
         </section>
       </main>
 
+      <main id="map-view" class="map-view" hidden>
+        <div class="map-toolbar">
+          <button id="btn-map-home" class="btn btn-secondary">{{mapa_volver}}</button>
+          <p>{{mapa_cabecera}}</p>
+        </div>
+        <div class="map-layout">
+          <section class="unit-map" aria-labelledby="map-title">
+            <header class="unit-banner">
+              <span id="map-icon" class="map-icon" aria-hidden="true"></span>
+              <div>
+                <p id="map-unit" class="eyebrow"></p>
+                <h2 id="map-title" tabindex="-1"></h2>
+                <p id="map-description"></p>
+              </div>
+            </header>
+            <p id="map-availability" class="map-availability" role="status"></p>
+            <div class="level-trail">
+              <svg id="map-lines" class="map-lines" aria-hidden="true" preserveAspectRatio="none">
+                <path id="map-connector" />
+              </svg>
+              <ol id="level-path" class="level-path" aria-label="{{mapa_camino}}"></ol>
+            </div>
+          </section>
+          <aside class="level-card" aria-labelledby="level-title">
+            <button id="btn-close-level" class="btn btn-secondary close-level">
+              {{cerrar_nivel}}
+            </button>
+            <p id="level-number" class="eyebrow"></p>
+            <h3 id="level-title"></h3>
+            <p id="level-description"></p>
+            <button id="btn-start-level" class="btn btn-primary" disabled>{{mapa_comenzar}}</button>
+            <p class="map-help">{{mapa_ayuda}}</p>
+            <button id="btn-retry-levels" class="btn btn-secondary" hidden>
+              {{reintentar_catalogo}}
+            </button>
+          </aside>
+        </div>
+      </main>
       <div id="practice-view" class="practice-view" hidden>
         <div class="practice-toolbar">
-          <button id="btn-volver-tematicas" class="btn btn-secondary">
-            {{volver_a_tematicas}}
-          </button>
+          <button id="btn-volver-tematicas" class="btn btn-secondary">{{volver_al_mapa}}</button>
           <div>
             <p class="eyebrow">{{espacio_de_practica_2}}</p>
             <h2 id="practice-title" tabindex="-1">{{saludos}}</h2>
@@ -185,6 +223,7 @@
               </div>
             </div>
 
+            <p id="avatar-source" class="avatar-source" role="status"></p>
             <figure class="reference-skeleton">
               <canvas
                 id="reference-skeleton-canvas"
