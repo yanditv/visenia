@@ -8,6 +8,7 @@ services:
       - '443:443'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../app/dist:/srv:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
@@ -20,14 +21,12 @@ services:
     container_name: visenia-fastapi-backend
     restart: unless-stopped
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-visenia}:${POSTGRES_PASSWORD:-visenia_secret}@db:5432/${POSTGRES_DB:-visenia_db}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-visenia}:${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en deploy/.env}@db:5432/${POSTGRES_DB:-visenia_db}
       - ENVIRONMENT=development
       - PORT=8000
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - '8000:8000'
 
   db:
     image: postgres:16-alpine
@@ -35,10 +34,8 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-visenia}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-visenia_secret}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en deploy/.env}
       POSTGRES_DB: ${POSTGRES_DB:-visenia_db}
-    ports:
-      - '5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
