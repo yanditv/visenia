@@ -166,6 +166,30 @@ test('un fotograma detenido libera el espejo y el avatar y no repite inferencia'
   assert.deepEqual(app.poses.at(-1), {});
   assert.equal(app.counts.detections, 1);
 });
+
+test('un fallo de inferencia conserva el bucle y admite reintentar el seguimiento', async () => {
+  let failing = true;
+  const app = boot({
+    detect: () => {
+      if (failing) throw Error('Contexto GPU perdido');
+      return { landmarks: {}, encuadreValido: false };
+    },
+  });
+  await flush();
+  await app.card(1).click();
+  app.element('webcam-video').currentTime = 1;
+  assert.doesNotThrow(() => app.frame(100));
+  assert.equal(app.raf.size, 1);
+  assert.match(app.element('load-vision').textContent, /GPU perdido/);
+  app.element('webcam-video').currentTime = 2;
+  app.frame(200);
+  assert.equal(app.counts.detections, 1);
+  failing = false;
+  await app.element('btn-retry-resources').click();
+  app.frame(300);
+  assert.equal(app.counts.detections, 2);
+  assert.equal(app.raf.size, 1);
+});
 test('el mapa solo inicia recursos al comenzar un nivel cargado y conserva su selección', async () => {
   const app = boot();
   await flush();

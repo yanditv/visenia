@@ -8,6 +8,7 @@
  * 4. Exportar el archivo JSON estricto validable contra referencia.schema.json v1.1.0
  */
 import { HolisticFrameLandmarks } from '../render/skeleton-renderer';
+import * as referenceSchema from '../../../data/schemas/referencia.schema.json';
 
 export interface FrameCapturaSchema {
   frame_idx: number;
@@ -66,6 +67,166 @@ export interface ReferenciaSenaData {
     };
   };
   frames: FrameCapturaSchema[];
+}
+
+type Schema = {
+  $ref?: string;
+  type?: string | string[];
+  const?: unknown;
+  enum?: unknown[];
+  required?: string[];
+  properties?: Record<string, Schema>;
+  additionalProperties?: Schema;
+  items?: Schema;
+  minItems?: number;
+  maxItems?: number;
+  minLength?: number;
+  minimum?: number;
+  maximum?: number;
+  pattern?: string;
+  format?: string;
+};
+
+// Validate the keywords used by referencia.schema.json, then temporal/rig invariants.
+function validateSchema(value: unknown, schema: Schema, path: string): void {
+  if (schema.$ref) {
+    const key = schema.$ref.split('/').pop()!;
+    return validateSchema(value, (referenceSchema.$defs as Record<string, Schema>)[key], path);
+  }
+  const fail = () => {
+    throw new Error(`Referencia inválida: ${path}`);
+  };
+  const types = schema.type ? [schema.type].flat() : [];
+  if (
+    types.length &&
+    !types.some((type) => {
+      if (type === 'null') return value === null;
+      if (type === 'array') return Array.isArray(value);
+      if (type === 'object')
+        return value !== null && typeof value === 'object' && !Array.isArray(value);
+      if (type === 'integer') return Number.isInteger(value);
+      if (type === 'number') return typeof value === 'number' && Number.isFinite(value);
+      return typeof value === type;
+    })
+  )
+    fail();
+  if ('const' in schema && value !== schema.const) fail();
+  if (schema.enum && !schema.enum.includes(value)) fail();
+  if (
+    typeof value === 'number' &&
+    (!Number.isFinite(value) ||
+      (schema.minimum !== undefined && value < schema.minimum) ||
+      (schema.maximum !== undefined && value > schema.maximum))
+  )
+    fail();
+  if (
+    typeof value === 'string' &&
+    ((schema.minLength !== undefined && value.length < schema.minLength) ||
+      (schema.pattern && !new RegExp(schema.pattern).test(value)) ||
+      (schema.format === 'date-time' && !Number.isFinite(Date.parse(value))))
+  )
+    fail();
+  if (Array.isArray(value)) {
+    if (
+      (schema.minItems !== undefined && value.length < schema.minItems) ||
+      (schema.maxItems !== undefined && value.length > schema.maxItems)
+    )
+      fail();
+    if (schema.items)
+      value.forEach((item, i) => validateSchema(item, schema.items!, `${path}[${i}]`));
+  } else if (value !== null && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    if (schema.required?.some((key) => !(key in record))) fail();
+    for (const [key, item] of Object.entries(record)) {
+      const child = schema.properties?.[key] ?? schema.additionalProperties;
+      if (child) validateSchema(item, child, `${path}.${key}`);
+    }
+  }
+}
+
+export function isLegacyDemoHand(hand: FrameCapturaSchema['mano_derecha']): boolean {
+  return (
+    !!hand &&
+    hand.length === 21 &&
+    hand.every(
+      (p, i) =>
+        Math.abs(p.x - hand[0].x - (i % 5) * 0.015) < 1e-7 &&
+        Math.abs(p.y - hand[0].y - Math.floor(i / 5) * 0.02) < 1e-7
+    )
+  );
+}
+
+export function validateReference(value: unknown): asserts value is ReferenciaSenaData {
+  validateSchema(value, referenceSchema, 'referencia');
+  const ref = value as ReferenciaSenaData;
+  const {
+    frames,
+    segmentacion: seg,
+    metadatos_grabacion: meta,
+    parametros_fonologicos: params,
+  } = ref;
+  const fail = (field: string) => {
+    throw new Error(`Referencia inválida: ${ref.id}.${field}`);
+  };
+  if (!frames.length || meta.total_frames !== frames.length) fail('total_frames');
+  const bounds = [
+    seg.frame_inicio_preparacion ?? 0,
+    seg.frame_inicio_sena,
+    seg.frame_fin_sena,
+    seg.frame_retorno ?? frames.length - 1,
+  ];
+  if (
+    bounds.some(
+      (n, i) => !Number.isInteger(n) || n < 0 || n >= frames.length || (i > 0 && n < bounds[i - 1])
+    )
+  )
+    fail('segmentacion');
+  frames.forEach((frame, i) => {
+    if (frame.frame_idx !== i || (i > 0 && frame.timestamp_ms <= frames[i - 1].timestamp_ms))
+      fail(`frames[${i}].tiempo`);
+    const legacy = isLegacyDemoHand(frame.mano_derecha) || isLegacyDemoHand(frame.mano_izquierda);
+    for (const key of ['pose', 'pose_world', 'mano_derecha', 'mano_izquierda'] as const) {
+      const points = frame[key];
+      const count = key.startsWith('mano') ? 21 : 33;
+      if (points && points.length !== count && !(legacy && count === 33 && points.length === 17))
+        fail(`frames[${i}].${key}`);
+    }
+    if (
+      frame.image_aspect !== undefined &&
+      (!Number.isFinite(frame.image_aspect) || frame.image_aspect <= 0)
+    )
+      fail('image_aspect');
+    for (const q of Object.values(frame.vrm_pose_override ?? {})) {
+      if (!q.some((n) => n !== 0)) fail('vrm_pose_override');
+    }
+    if (Object.values(frame.blendshapes_rostro ?? {}).some((n) => n < 0 || n > 1))
+      fail('blendshapes_rostro');
+  });
+  const duration = frames[frames.length - 1].timestamp_ms - frames[0].timestamp_ms;
+  // Legacy files round milliseconds; metadata fps is the measured average rate.
+  if (
+    Math.abs(meta.duracion_ms - duration) > 1 ||
+    duration <= 0 ||
+    Math.abs(meta.fps - ((frames.length - 1) * 1000) / duration) > Math.max(0.1, meta.fps * 0.05)
+  )
+    fail('duracion_ms/fps');
+  if (!params.kinema_orientacion.vector_palma.some((n) => n !== 0)) fail('vector_palma');
+  const facial = params.prosoponema_no_manual;
+  if (
+    (facial.requerido && !Object.keys(facial.blendshapes_clave ?? {}).length) ||
+    Object.values(facial.blendshapes_clave ?? {}).some((n) => n < 0 || n > 1)
+  )
+    fail('blendshapes_clave');
+}
+
+export function validateCatalog(value: unknown): asserts value is ReferenciaSenaData[] {
+  if (!Array.isArray(value)) throw new Error('El catálogo debe ser una lista de referencias.');
+  const ids = new Set<string>();
+  for (const ref of value) {
+    validateReference(ref);
+    if (ids.has(ref.id)) throw new Error(`Referencia duplicada: ${ref.id}`);
+    ids.add(ref.id);
+  }
 }
 
 export class AnnotationService {
@@ -172,11 +333,20 @@ export class AnnotationService {
     kinesemaTipo: 'rectilineo' | 'curvo' | 'circular' | 'ondulatorio' | 'estatico';
     kinesemaRepeticiones: number;
     prosoponemaRequerido: boolean;
+    prosoponemaBlendshapes?: Record<string, number>;
     frames?: FrameCapturaSchema[];
   }): ReferenciaSenaData {
     const source = config.frames ?? this.frames;
-    const start = Math.max(0, Math.min(source.length - 1, Math.trunc(config.frameInicioSena)));
-    const end = Math.max(start, Math.min(source.length - 1, Math.trunc(config.frameFinSena)));
+    const start = config.frameInicioSena;
+    const end = config.frameFinSena;
+    if (
+      !Number.isInteger(start) ||
+      !Number.isInteger(end) ||
+      start < 0 ||
+      end < start ||
+      end >= source.length
+    )
+      throw new Error('La segmentación contiene índices inválidos.');
     const segment = source.slice(start, end + 1);
     if (segment.length < 2) throw new Error('Selecciona al menos dos cuadros de la seña.');
     const origin = segment[0].timestamp_ms;
@@ -201,6 +371,9 @@ export class AnnotationService {
       throw new Error(
         'La captura no alcanza 15 fps. Repite la toma para conservar su velocidad real.'
       );
+    if (duracionMs < 100) throw new Error('La seña debe durar al menos 100 ms.');
+    if (config.prosoponemaRequerido && !Object.keys(config.prosoponemaBlendshapes ?? {}).length)
+      throw new Error('Define un objetivo facial explícito para la expresión requerida.');
 
     const cleanGlosa = config.glosa
       .trim()
@@ -208,7 +381,7 @@ export class AnnotationService {
       .replace(/[^a-z0-9]+/g, '-');
     const id = `ref-${cleanGlosa || 'sena'}-${Date.now().toString().slice(-6)}`;
 
-    return {
+    const document: ReferenciaSenaData = {
       schema_version: '1.1.0',
       id,
       glosa: config.glosa.trim().toUpperCase(),
@@ -218,7 +391,7 @@ export class AnnotationService {
       metadatos_grabacion: {
         fps,
         total_frames: totalFrames,
-        duracion_ms: Math.max(100, duracionMs),
+        duracion_ms: duracionMs,
         anotador: config.anotador.trim() || 'Especialista LSE',
         fecha_anotacion: new Date().toISOString(),
       },
@@ -248,11 +421,13 @@ export class AnnotationService {
         },
         prosoponema_no_manual: {
           requerido: config.prosoponemaRequerido,
-          blendshapes_clave: config.prosoponemaRequerido ? { jawOpen: 0.3 } : {},
+          blendshapes_clave: { ...config.prosoponemaBlendshapes },
         },
       },
       frames: framesToUse,
     };
+    validateReference(document);
+    return document;
   }
 
   /**

@@ -36,60 +36,66 @@ export class VisionService {
   private framingSince: number | null = null;
   private lastTimestamp: number | null = null;
   private previousHands: { left?: LandmarkPoint; right?: LandmarkPoint } = {};
-  private isInitializing: boolean = false;
+  private initialization: Promise<void> | null = null;
   private isReady: boolean = false;
 
   public async init(): Promise<void> {
-    if (this.isReady || this.isInitializing) return;
-    this.isInitializing = true;
+    if (this.isReady) return;
+    this.initialization ??= this.initialize().finally(() => {
+      this.initialization = null;
+    });
+    await this.initialization;
+  }
 
+  private async initialize(): Promise<void> {
     try {
-      const wasmFileset = await FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
-      );
+      const wasmFileset = await FilesetResolver.forVisionTasks('/wasm');
 
-      // Carga independiente: un modelo fallido no impide que los demás funcionen
+      // Conserva los modelos cargados y reintenta solo los que faltan.
       const resultados = await Promise.allSettled([
         // 1. Detector de Pose corporal (landmarks 2D + world 3D en metros)
         // Umbral calibrado a 0.3 para seguimiento continuo en planos medios/busto sin perder articulaciones
-        PoseLandmarker.createFromOptions(wasmFileset, {
-          baseOptions: {
-            modelAssetPath: '/models/pose_landmarker.task',
-            delegate: 'GPU',
-          },
-          runningMode: 'VIDEO',
-          numPoses: 1,
-          minPoseDetectionConfidence: 0.3,
-          minPosePresenceConfidence: 0.3,
-          minTrackingConfidence: 0.3,
-        }),
+        this.poseLandmarker ??
+          PoseLandmarker.createFromOptions(wasmFileset, {
+            baseOptions: {
+              modelAssetPath: '/models/pose_landmarker.task',
+              delegate: 'GPU',
+            },
+            runningMode: 'VIDEO',
+            numPoses: 1,
+            minPoseDetectionConfidence: 0.3,
+            minPosePresenceConfidence: 0.3,
+            minTrackingConfidence: 0.3,
+          }),
 
         // 2. Detector de Manos (calibrado a 0.3 para evitar pérdida sobre ropa/pecho)
-        HandLandmarker.createFromOptions(wasmFileset, {
-          baseOptions: {
-            modelAssetPath: '/models/hand_landmarker.task',
-            delegate: 'GPU',
-          },
-          runningMode: 'VIDEO',
-          numHands: 2,
-          minHandDetectionConfidence: 0.3,
-          minHandPresenceConfidence: 0.3,
-          minTrackingConfidence: 0.3,
-        }),
+        this.handLandmarker ??
+          HandLandmarker.createFromOptions(wasmFileset, {
+            baseOptions: {
+              modelAssetPath: '/models/hand_landmarker.task',
+              delegate: 'GPU',
+            },
+            runningMode: 'VIDEO',
+            numHands: 2,
+            minHandDetectionConfidence: 0.3,
+            minHandPresenceConfidence: 0.3,
+            minTrackingConfidence: 0.3,
+          }),
 
         // 3. Detector de Rostro con extracción de Blendshapes (prosoponema)
-        FaceLandmarker.createFromOptions(wasmFileset, {
-          baseOptions: {
-            modelAssetPath: '/models/face_landmarker.task',
-            delegate: 'GPU',
-          },
-          outputFaceBlendshapes: true,
-          runningMode: 'VIDEO',
-          numFaces: 1,
-          minFaceDetectionConfidence: 0.4,
-          minFacePresenceConfidence: 0.4,
-          minTrackingConfidence: 0.4,
-        }),
+        this.faceLandmarker ??
+          FaceLandmarker.createFromOptions(wasmFileset, {
+            baseOptions: {
+              modelAssetPath: '/models/face_landmarker.task',
+              delegate: 'GPU',
+            },
+            outputFaceBlendshapes: true,
+            runningMode: 'VIDEO',
+            numFaces: 1,
+            minFaceDetectionConfidence: 0.4,
+            minFacePresenceConfidence: 0.4,
+            minTrackingConfidence: 0.4,
+          }),
       ]);
 
       const [rPose, rHand, rFace] = resultados;
@@ -124,22 +130,17 @@ export class VisionService {
         );
       }
 
-      if (this.poseLandmarker && this.handLandmarker) {
+      if (this.poseLandmarker && this.handLandmarker && this.faceLandmarker) {
         this.isReady = true;
-        const rostroEstado = this.faceLandmarker
-          ? 'Rostro+Blendshapes activos'
-          : 'Rostro NO disponible (solo Pose+Manos)';
-        console.log(`[VisionService] Servicio activo con GPU. ${rostroEstado}.`);
+        console.log('[VisionService] Servicio activo con GPU. Rostro+Blendshapes activos.');
       } else {
         throw new Error(
-          'Modelos mínimos (Pose/Manos) no disponibles. Revisa los archivos .task en /public/models/.'
+          'Modelos requeridos (Pose/Manos/Rostro) no disponibles. Revisa los archivos .task en /public/models/.'
         );
       }
     } catch (err) {
       console.error('[VisionService] Error crítico al inicializar MediaPipe:', err);
       throw err;
-    } finally {
-      this.isInitializing = false;
     }
   }
 

@@ -75,15 +75,17 @@
       ],
       "properties": {
         "queirema_configuracion": {
+          "required": ["codigo_forma", "descripcion", "tolerancia_grados"],
           "type": "object",
           "description": "Configuración de la forma de la(s) mano(s)",
           "properties": {
             "codigo_forma": { "type": "string" },
             "descripcion": { "type": "string" },
-            "tolerancia_grados": { "type": "number", "default": 20 }
+            "tolerancia_grados": { "type": "number", "minimum": 0, "default": 20 }
           }
         },
         "kinema_orientacion": {
+          "required": ["vector_palma", "tolerancia_grados"],
           "type": "object",
           "description": "Orientación de la palma y vector de dirección",
           "properties": {
@@ -93,10 +95,11 @@
               "minItems": 3,
               "maxItems": 3
             },
-            "tolerancia_grados": { "type": "number", "default": 25 }
+            "tolerancia_grados": { "type": "number", "minimum": 0, "default": 25 }
           }
         },
         "toponema_ubicacion": {
+          "required": ["zona_corporal", "tolerancia_radio"],
           "type": "object",
           "description": "Zona corporal o espacial donde se articula el signo",
           "properties": {
@@ -112,10 +115,11 @@
                 "mano_base"
               ]
             },
-            "tolerancia_radio": { "type": "number", "default": 0.15 }
+            "tolerancia_radio": { "type": "number", "minimum": 0, "default": 0.15 }
           }
         },
         "kinesema_movimiento": {
+          "required": ["tipo_movimiento", "repeticiones"],
           "type": "object",
           "description": "Trayectoria, velocidad y repetición del movimiento",
           "properties": {
@@ -127,6 +131,7 @@
           }
         },
         "prosoponema_no_manual": {
+          "required": ["requerido"],
           "type": "object",
           "description": "Expresiones faciales y gestos corporales no manuales",
           "properties": {
@@ -143,6 +148,7 @@
     "frames": {
       "type": "array",
       "description": "Secuencia temporal de fotogramas capturados",
+      "minItems": 1,
       "items": { "$ref": "#/$defs/FrameCaptura" }
     }
   },

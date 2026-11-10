@@ -84,7 +84,7 @@ const config = {
 };
 test('exportación recorta y rebasa timestamps sin falsear fps', () => {
   const a = new AnnotationService();
-  const frames = [0, 40, 80, 120, 160].map((timestamp_ms, frame_idx) => ({
+  const frames = [0, 50, 100, 150, 200].map((timestamp_ms, frame_idx) => ({
     timestamp_ms,
     frame_idx,
   }));
@@ -92,11 +92,118 @@ test('exportación recorta y rebasa timestamps sin falsear fps', () => {
   assert.equal(doc.frames.length, 3);
   assert.deepEqual(
     doc.frames.map((f) => f.timestamp_ms),
-    [0, 40, 80]
+    [0, 50, 100]
   );
-  assert.equal(doc.metadatos_grabacion.fps, 25);
+  assert.equal(doc.metadatos_grabacion.fps, 20);
+  assert.equal(doc.metadatos_grabacion.duracion_ms, 100);
   assert.equal(doc.segmentacion.frame_inicio_sena, 0);
   assert.equal(doc.segmentacion.frame_fin_sena, 2);
+});
+test('exportación rechaza una seña menor de 100ms y exige objetivo facial explícito', () => {
+  const a = new AnnotationService();
+  const frames = [0, 40, 80, 120].map((timestamp_ms, frame_idx) => ({ timestamp_ms, frame_idx }));
+  assert.throws(() => a.buildReferenceDocument({ ...config, frames }), /100 ms/);
+  const longer = frames.map((f) => ({ ...f, timestamp_ms: f.timestamp_ms * 1.5 }));
+  assert.throws(
+    () => a.buildReferenceDocument({ ...config, frames: longer, prosoponemaRequerido: true }),
+    /facial/
+  );
+  const doc = a.buildReferenceDocument({
+    ...config,
+    frames: longer,
+    prosoponemaRequerido: true,
+    prosoponemaBlendshapes: { browInnerUp: 0.6 },
+  });
+  assert.deepEqual(doc.parametros_fonologicos.prosoponema_no_manual.blendshapes_clave, {
+    browInnerUp: 0.6,
+  });
+});
+test('exportación rechaza segmentación y parámetros inválidos', () => {
+  const a = new AnnotationService();
+  const frames = [0, 50, 100, 150, 200].map((timestamp_ms, frame_idx) => ({
+    timestamp_ms,
+    frame_idx,
+  }));
+  assert.throws(
+    () => a.buildReferenceDocument({ ...config, frames, frameInicioSena: -1 }),
+    /segment/
+  );
+  assert.throws(
+    () => a.buildReferenceDocument({ ...config, frames, kinemaPalma: [0, 0, 0] }),
+    /vector_palma/
+  );
+  assert.throws(
+    () => a.buildReferenceDocument({ ...config, frames, kinesemaRepeticiones: -1 }),
+    /kinesema/
+  );
+});
+
+test('catálogo publicado carga y rechaza corrupción anidada antes de reproducir', async (t) => {
+  const c = new CatalogoPlayerService();
+  let payload = references;
+  t.mock.method(global, 'fetch', async () => ({ ok: true, json: async () => payload }));
+  t.mock.method(console, 'error', () => {});
+  assert.equal((await c.loadCatalog()).length, references.length);
+  const corruptions = [
+    (s) => {
+      s.parametros_fonologicos = {};
+    },
+    (s) => {
+      s.parametros_fonologicos.kinema_orientacion.vector_palma = [0, 0];
+    },
+    (s) => {
+      s.segmentacion.frame_inicio_sena = 0.5;
+    },
+    (s) => {
+      s.segmentacion.frame_fin_sena = s.frames.length;
+    },
+    (s) => {
+      s.segmentacion.frame_inicio_sena = s.segmentacion.frame_fin_sena + 1;
+    },
+    (s) => {
+      s.frames[1].frame_idx = 0;
+    },
+    (s) => {
+      s.frames[1].timestamp_ms = Infinity;
+    },
+    (s) => {
+      s.frames[1].pose = {};
+    },
+    (s) => {
+      s.frames[1].pose = s.frames[1].pose.slice(1);
+    },
+    (s) => {
+      s.frames[1].mano_derecha = s.frames[1].mano_derecha.slice(1);
+    },
+    (s) => {
+      s.frames[1].pose[0].x = NaN;
+    },
+    (s) => {
+      s.frames[1].vrm_pose_override = { head: [0, 0, 0, 0] };
+    },
+    (s) => {
+      s.frames[1].vrm_pose_override = { head: [0, 0, 1] };
+    },
+    (s) => {
+      s.frames[1].vrm_pose_override = { head: [0, 0, NaN, 1] };
+    },
+    (s) => {
+      s.metadatos_grabacion.total_frames++;
+    },
+    (s) => {
+      s.metadatos_grabacion.duracion_ms *= 10;
+    },
+    (s) => {
+      s.metadatos_grabacion.fps *= 10;
+    },
+  ];
+  for (const corrupt of corruptions) {
+    payload = [structuredClone(references[0])];
+    corrupt(payload[0]);
+    assert.equal((await c.loadCatalog()).length, 0, corrupt.toString());
+    assert.equal(c.getIsLoaded(), false);
+    assert.equal(c.getSelectedSena(), null);
+  }
 });
 test('captura inferior a 15 fps se rechaza en lugar de acelerar silenciosamente', () => {
   const a = new AnnotationService();
@@ -104,6 +211,7 @@ test('captura inferior a 15 fps se rechaza en lugar de acelerar silenciosamente'
   assert.throws(() => a.buildReferenceDocument({ ...config, frames }), /15 fps/);
 });
 test('catálogo inválido falla con estado descargado', async (t) => {
+  t.mock.method(console, 'error', () => {});
   t.mock.method(global, 'fetch', async () => ({ ok: true, json: async () => ({ frames: [] }) }));
   const c = new CatalogoPlayerService();
   assert.deepEqual(await c.loadCatalog(), []);

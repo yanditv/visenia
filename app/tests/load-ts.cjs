@@ -12,6 +12,7 @@ module.exports = function loadTs(relativePath) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   new Function('require', 'exports', code)((name) => {
+    if (name.endsWith('.json')) return require(path.resolve(path.dirname(filename), name));
     if (name.includes('GLTFLoader') || name === '@mediapipe/tasks-vision') return {};
     if (name.startsWith('.'))
       return module.exports(

@@ -7,7 +7,12 @@
  * - Emisión de landmarks por fotograma para el solver Kalidokit
  */
 import { Quaternion } from 'three';
-import { ReferenciaSenaData, FrameCapturaSchema } from '../anotador/annotation-service';
+import {
+  ReferenciaSenaData,
+  FrameCapturaSchema,
+  validateCatalog,
+  isLegacyDemoHand,
+} from '../anotador/annotation-service';
 import { HolisticFrameLandmarks, LandmarkPoint } from '../render/skeleton-renderer';
 
 export class CatalogoPlayerService {
@@ -29,27 +34,7 @@ export class CatalogoPlayerService {
         throw new Error(`Error HTTP ${res.status} al cargar catálogo de señas.`);
       }
       const data: unknown = await res.json();
-      if (
-        !Array.isArray(data) ||
-        !data.every(
-          (s) =>
-            s &&
-            typeof s.id === 'string' &&
-            typeof s.glosa === 'string' &&
-            s.parametros_fonologicos &&
-            Array.isArray(s.frames) &&
-            s.frames.length > 0 &&
-            s.segmentacion &&
-            s.metadatos_grabacion &&
-            s.frames.every(
-              (f: FrameCapturaSchema, i: number) =>
-                Number.isFinite(f.timestamp_ms) &&
-                (i === 0 || f.timestamp_ms > s.frames[i - 1].timestamp_ms)
-            )
-        )
-      ) {
-        throw new Error('El catálogo no contiene referencias con tiempos válidos.');
-      }
+      validateCatalog(data);
       this.catalogo = data;
       this.selectedSena = null;
       this.isPlaying = false;
@@ -303,12 +288,7 @@ export class CatalogoPlayerService {
     }
 
     const isGrid = (hand: LandmarkPoint[] | undefined) =>
-      hand?.length === 21 &&
-      hand.every(
-        (p, i) =>
-          Math.abs(p.x - hand[0].x - (i % 5) * 0.015) < 1e-7 &&
-          Math.abs(p.y - hand[0].y - Math.floor(i / 5) * 0.02) < 1e-7
-      );
+      isLegacyDemoHand(hand as FrameCapturaSchema['mano_derecha']);
     // Legacy demo frames contain a rectangular point grid, not MediaPipe hand anatomy.
     // Preserve the source JSON and use an open-hand preview, never feed the grid to the rig.
     result.isDemo = !!(isGrid(result.rightHand) || isGrid(result.leftHand));

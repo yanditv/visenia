@@ -78,7 +78,16 @@ const selectManoDom = document.getElementById('select-mano-dom') as HTMLSelectEl
 const selectToponema = document.getElementById('select-toponema') as HTMLSelectElement;
 const selectKinesema = document.getElementById('select-kinesema') as HTMLSelectElement;
 const inputQueirema = document.getElementById('input-queirema') as HTMLInputElement;
+const inputQueiremaDesc = document.getElementById('input-queirema-desc') as HTMLInputElement;
+const inputPalmaX = document.getElementById('input-palma-x') as HTMLInputElement;
+const inputPalmaY = document.getElementById('input-palma-y') as HTMLInputElement;
+const inputPalmaZ = document.getElementById('input-palma-z') as HTMLInputElement;
+const inputRepeticiones = document.getElementById('input-repeticiones') as HTMLInputElement;
 const checkProsoponema = document.getElementById('check-prosoponema') as HTMLInputElement;
+const selectProsoponemaTarget = document.getElementById(
+  'select-prosoponema-target'
+) as HTMLSelectElement;
+const inputProsoponemaCoef = document.getElementById('input-prosoponema-coef') as HTMLInputElement;
 const btnExportJson = document.getElementById('btn-export-json') as HTMLButtonElement;
 const exportMsg = document.getElementById('export-msg') as HTMLSpanElement;
 
@@ -97,6 +106,7 @@ const catalogoService = new CatalogoPlayerService();
 let avatarViewer: VrmAvatarViewer | null = null;
 let avatarLoad: Promise<unknown> | null = null;
 let visionLoad: Promise<void> | null = null;
+let visionFaulted = false;
 let cameraLoad: Promise<MediaStream> | null = null;
 let activeUnit: number | null = null;
 let sessionId = 0;
@@ -279,7 +289,12 @@ async function prepareVision(id: number): Promise<void> {
       });
       await visionLoad;
     }
-    if (currentSession(id)) resourceStatus('vision', mensajes.visionLista, 'ready');
+    if (currentSession(id)) {
+      visionFaulted = false;
+      visionService.resetTracking();
+      lastVideoTime = -1;
+      resourceStatus('vision', mensajes.visionLista, 'ready');
+    }
   } catch (error) {
     if (!currentSession(id)) return;
     resourceStatus(
@@ -540,12 +555,26 @@ function animationLoop(timestamp: number) {
     userLandmarks = renderer.generateSyntheticPose(timestamp);
     encuadreBox?.classList.add('valido');
   } else if (cameraService.isRunning()) {
-    if (visionService.getReadyStatus()) {
+    if (visionService.getReadyStatus() && !visionFaulted) {
       if (video.currentTime !== lastVideoTime) {
-        freshFrame = true;
-        lastDetection = visionService.detect(video, timestamp);
-        lastVideoTime = video.currentTime;
-        lastDetectionAt = timestamp;
+        try {
+          lastDetection = visionService.detect(video, timestamp);
+          freshFrame = true;
+          lastVideoTime = video.currentTime;
+          lastDetectionAt = timestamp;
+        } catch (error) {
+          visionFaulted = true;
+          lastDetection = { landmarks: {}, encuadreValido: false };
+          visionService.resetTracking();
+          if (annotationService.getIsRecording()) btnRecordSena.click();
+          resourceStatus(
+            'vision',
+            mensajes.visionError(
+              error instanceof Error ? error.message : mensajes.recursoNoDisponible
+            ),
+            'error'
+          );
+        }
       }
       if (timestamp - lastDetectionAt > 250) {
         lastDetection = { landmarks: {}, encuadreValido: false };
@@ -722,6 +751,13 @@ sliderFrameFin.addEventListener('input', () => {
 });
 
 // ─── Exportación de JSON Schema v1.1.0 ───────────────────────────────────────
+checkProsoponema.addEventListener('change', () => {
+  for (const field of [selectProsoponemaTarget, inputProsoponemaCoef]) {
+    field.disabled = !checkProsoponema.checked;
+    field.required = checkProsoponema.checked;
+  }
+});
+
 btnExportJson.addEventListener('click', () => {
   const recorded = annotationService.getRecordedFrames();
   if (recorded.length === 0) {
@@ -738,21 +774,72 @@ btnExportJson.addEventListener('click', () => {
   }
 
   try {
+    exportMsg.textContent = '';
+    const fields = [
+      selectUnidad,
+      inputQueirema,
+      inputQueiremaDesc,
+      selectToponema,
+      selectKinesema,
+      inputPalmaX,
+      inputPalmaY,
+      inputPalmaZ,
+      inputRepeticiones,
+      sliderFrameInicio,
+      sliderFrameFin,
+      ...(checkProsoponema.checked ? [selectProsoponemaTarget, inputProsoponemaCoef] : []),
+    ];
+    for (const field of fields) {
+      if (!field.reportValidity()) return;
+      if (!field.value.trim()) {
+        field.focus();
+        throw new Error('Completa los parámetros fonológicos antes de exportar.');
+      }
+    }
+    const kinemaPalma: [number, number, number] = [
+      Number(inputPalmaX.value),
+      Number(inputPalmaY.value),
+      Number(inputPalmaZ.value),
+    ];
+    const repeticiones = Number(inputRepeticiones.value);
+    const unidad = Number(selectUnidad.value);
+    const inicio = Number(sliderFrameInicio.value);
+    const fin = Number(sliderFrameFin.value);
+    if (!kinemaPalma.every(Number.isFinite) || kinemaPalma.every((value) => value === 0))
+      throw new Error('La orientación de la palma debe ser un vector numérico distinto de cero.');
+    if (!Number.isInteger(repeticiones) || repeticiones < 0)
+      throw new Error('Las repeticiones deben ser un número entero mayor o igual a cero.');
+    if (
+      !Number.isInteger(unidad) ||
+      unidad < 1 ||
+      unidad > 12 ||
+      !Number.isInteger(inicio) ||
+      !Number.isInteger(fin)
+    )
+      throw new Error('Revisa la unidad temática y los límites de la seña.');
+    let prosoponemaBlendshapes: Record<string, number> | undefined;
+    if (checkProsoponema.checked) {
+      const coefficient = Number(inputProsoponemaCoef.value);
+      if (!Number.isFinite(coefficient) || coefficient < 0 || coefficient > 1)
+        throw new Error('El coeficiente facial debe estar entre 0 y 1.');
+      prosoponemaBlendshapes = { [selectProsoponemaTarget.value]: coefficient };
+    }
     const doc = annotationService.buildReferenceDocument({
       glosa,
-      unidadTematica: parseInt(selectUnidad.value) || 1,
+      unidadTematica: unidad,
       dificultad: selectDificultad.value as 'facil' | 'intermedio' | 'avanzado',
       manoDominante: selectManoDom.value as 'derecha' | 'izquierda' | 'ambas',
       anotador: 'Especialista LSE Viseña',
-      frameInicioSena: parseInt(sliderFrameInicio.value),
-      frameFinSena: parseInt(sliderFrameFin.value),
-      queiremaForma: inputQueirema.value.trim() || 'mano_plana',
-      queiremaDesc: 'Configuración manual base anotada',
-      kinemaPalma: [0.0, 1.0, 0.0],
+      frameInicioSena: inicio,
+      frameFinSena: fin,
+      queiremaForma: inputQueirema.value.trim(),
+      queiremaDesc: inputQueiremaDesc.value.trim(),
+      kinemaPalma,
       toponemaZona: selectToponema.value as any,
       kinesemaTipo: selectKinesema.value as any,
-      kinesemaRepeticiones: 1,
+      kinesemaRepeticiones: repeticiones,
       prosoponemaRequerido: checkProsoponema.checked,
+      prosoponemaBlendshapes,
     });
 
     annotationService.downloadJson(doc);
@@ -766,7 +853,7 @@ btnExportJson.addEventListener('click', () => {
 });
 
 // ─── Registro de Service Worker para PWA (offline) ───────────────────────────
-if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
+if ('serviceWorker' in navigator && window.isSecureContext) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch((err) => {
       console.warn('[PWA] Service Worker no registrado (modo dev local):', err);

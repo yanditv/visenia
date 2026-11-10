@@ -18,6 +18,8 @@ exports.boot = (options = {}) => {
   const elements = new Map(),
     counts = { avatar: 0, vision: 0, camera: 0, stops: 0, renders: 0, detections: 0 };
   const poses = [],
+    annotationConfigs = [],
+    downloads = [],
     raf = new Map();
   let frameId = 0,
     running = false,
@@ -87,6 +89,7 @@ exports.boot = (options = {}) => {
       focus() {
         this.focused = true;
       },
+      reportValidity: () => true,
       click() {
         if (this.disabled) return;
         return this.onclick?.() ?? this.listeners.click?.();
@@ -166,6 +169,16 @@ exports.boot = (options = {}) => {
     getIsRecording() {
       return false;
     }
+    getRecordedFrames() {
+      return options.recordedFrames ?? [];
+    }
+    buildReferenceDocument(config) {
+      annotationConfigs.push(config);
+      return { id: 'test-reference' };
+    }
+    downloadJson(doc) {
+      downloads.push(doc);
+    }
   }
   const modules = {
     '../ui/mapa': load('ui/mapa.ts'),
@@ -206,6 +219,8 @@ exports.boot = (options = {}) => {
     element,
     counts,
     poses,
+    annotationConfigs,
+    downloads,
     raf,
     theme: (unit) =>
       element('tematicas-grid').children.find((x) => x.dataset.unit === String(unit)),
