@@ -30,6 +30,9 @@ jobs:
       - name: Validar formato con Prettier
         run: bun run format:check
 
+      - name: Analizar tipos y sintaxis
+        run: bun run lint
+
   schema-validation:
     name: Validación de Contratos JSON Schema (ERS 6.1, 6.2)
     runs-on: ubuntu-latest
@@ -42,21 +45,16 @@ jobs:
         with:
           node-version: 20
 
-      - name: Validar sintaxis de JSON Schemas
-        run: |
-          node -e '
-            const fs = require("fs");
-            const path = require("path");
-            const schemasDir = path.join(process.cwd(), "data", "schemas");
-            if (fs.existsSync(schemasDir)) {
-              const files = fs.readdirSync(schemasDir).filter(f => f.endsWith(".json"));
-              files.forEach(file => {
-                const content = fs.readFileSync(path.join(schemasDir, file), "utf-8");
-                JSON.parse(content);
-                console.log(`[OK] Schema JSON valido: ${file}`);
-              });
-            }
-          '
+      - name: Configurar Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Instalar dependencias
+        run: bun install --frozen-lockfile
+
+      - name: Validar contratos y referencias publicadas
+        run: bun run validate:catalog
 
   test:
     name: Pruebas Automatizadas Unitarias (RNF-15)
@@ -83,3 +81,22 @@ jobs:
 
       - name: Compilar la aplicación
         run: bun run build
+
+  backend-and-deploy:
+    name: Verificación de API e infraestructura
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Instalar dependencias del servidor
+        run: python -m pip install -r server/requirements.txt
+      - name: Probar vida y disponibilidad de la API
+        run: python -m unittest discover -s server -v
+      - name: Validar Docker Compose
+        env:
+          POSTGRES_PASSWORD: ci-config-only
+        run: docker compose -f deploy/docker-compose.yml config --quiet
+      - name: Validar Caddy
+        run: docker run --rm -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile

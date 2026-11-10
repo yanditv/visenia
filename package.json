@@ -8,7 +8,8 @@
     "app"
   ],
   "scripts": {
-    "lint": "eslint . --ext .ts,.tsx,.js,.json",
+    "lint": "bun run --cwd app lint",
+    "validate:catalog": "bun run --cwd app validate:catalog",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
     "test": "bun run --cwd app test",
