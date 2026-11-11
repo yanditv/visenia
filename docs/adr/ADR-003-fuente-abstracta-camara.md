@@ -1,12 +1,5 @@
 # ADR-003: Abstracción de Fuente de Video y Señales de Captura
 
-- **Estado:** Aprobado
-- **Fecha:** 2026-10-27
-- **Autor:** Desarrollador B (Lucas) / Coordinado con Desarrollador A (Mateo Pacheco)
-- **Requerimiento / Contexto:** ERS 8.1 / RF-01, RF-02 / RNF-14, RNF-15 / CI Testing
-
----
-
 ## 1. Contexto y Problema
 
 El subsistema "Espejo de Señas" depende del flujo continuo de video proveniente de `navigator.mediaDevices.getUserMedia`. Sin embargo:

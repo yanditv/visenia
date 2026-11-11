@@ -1,12 +1,5 @@
 # ADR-001: Formato y Normalización de Puntos Clave (MediaPipe Holistic)
 
-- **Estado:** Aprobado (Revisión v1.1)
-- **Fecha:** 2026-10-27
-- **Autor:** Desarrollador B (Lucas) / Revisado con Desarrollador A (Mateo Pacheco)
-- **Requerimiento / Contexto:** ERS 6.1, 6.2, 8.1 / RF-01, RF-20, RF-34, RF-42 / Fondo INVENTA
-
----
-
 ## 1. Contexto y Problema
 
 El sistema Viseña requiere capturar y analizar la ejecución de señas por parte del usuario para:

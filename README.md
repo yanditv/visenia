@@ -1,18 +1,9 @@
 # Viseña (VISPROY)
 
 > **Plataforma Educativa y de Práctica Asistida de Lengua de Señas con Espejo Digital y Avatar 3D**  
-> Proyecto financiado por el fondo **INVENTA** y sujeto a declaración de invención y trazabilidad de requerimientos.
-
 ---
 
-## 1. Equipo y Roles Técnicos
-
-- **Desarrollador A:** Mateo Pacheco — Motor TypeScript/Python fonológico, segmentación de señales (`encuadre_valido`, `inicio_sena`, `fin_sena`), algoritmos DTW y extracción de parámetros.
-- **Desarrollador B:** Lucas — PWA Espejo de Señas, Avatar 3D VRM (Three.js/three-vrm), pipelines de infraestructura local/laboratorio (Caddy/Docker), sincronización y herramientas de anotación.
-
----
-
-## 2. Convención y Flujo de Trabajo (Git Workflow)
+## 1. Convención y Flujo de Trabajo (Git Workflow)
 
 Conforme a la sección 8.1 del ERS:
 
@@ -41,12 +32,12 @@ Conforme a la sección 8.1 del ERS:
 
 ```text
 visenia/
-├── app/                  # PWA Frontend (Vite + TypeScript + MediaPipe Holistic + Three.js/VRM)
+├── app/                  # PWA (Vite + TypeScript + MediaPipe Pose/Hand/Face + Three.js/VRM)
 ├── data/
 │   └── schemas/          # JSON Schemas maestros: referencia y ejecución (ERS 6.1, 6.2)
 ├── deploy/               # Caddy (HTTPS local), FastAPI y PostgreSQL (Docker Compose ERS 3.4)
 ├── docs/                 # Decisiones, fuentes LSEC y estado técnico
-├── server/               # Backend FastAPI + SQLModel para almacenamiento y exportación (RF-34, RF-37)
+├── server/               # API FastAPI: salud, disponibilidad de PostgreSQL y versión
 └── .github/
     └── workflows/        # Pipelines de Integración Continua (CI)
 ```
@@ -62,6 +53,8 @@ Desde la raíz:
 ```sh
 bun install --frozen-lockfile
 bun run --cwd app dev
+bun run lint
+bun run validate:catalog
 bun run test
 bun run build
 bun run format:check
@@ -89,9 +82,24 @@ python -m unittest discover -s server -v
 
 ## 5. Entrega Frontend-G0
 
-La PWA incluye doce temáticas, tres demostraciones, espejo, avatar VRM y anotación de referencias. El lote LSEC revisado y el motor de evaluación siguen pendientes de integración.
+Estado al **10 de noviembre de 2026**, rama `Frontend-G0`, commit `3ba8621`:
 
-- [Informe técnico consolidado](docs/informes/2026-11-04-estado-tecnico-y-dependencias-programador-a.md)
+- Doce temáticas con mapa de niveles; la cámara, MediaPipe y el avatar se inician al comenzar un nivel disponible. Los niveles sin referencias permanecen inhabilitados.
+- Tres demostraciones sintéticas: HOLA en Saludos; GRACIAS y POR FAVOR en Cortesía. Reproductor con segmentos, pausa, desplazamiento y velocidades 1×/0,5×; modos guía y espejo separados.
+- Anotador con campos fonológicos, expresión facial explícita cuando se requiere y validación antes de exportar referencias.
+- Interfaz es-EC, fuentes locales, tamaño de texto, contraste alto y preferencia de mano almacenados localmente. La preferencia de mano no acredita adaptación del motor para zurdos.
+- WASM local y service worker generado con el inventario del build. La sesión offline requiere una carga inicial con red y la instalación completa del caché; pendiente la comprobación física en laboratorio.
+- API con `/api/health`, `/api/ready` y `/api/version`; Caddy sirve el frontend compilado y solo el proxy expone puertos.
+
+**Verificación local:** 54 pruebas aprobadas, tipos/sintaxis, formato, catálogo y build correctos; configuración Compose válida usando una contraseña de prueba. El bundle principal es de 881,31 kB (gzip 232,26 kB), con aviso de tamaño de Vite. Las pruebas del backend no pudieron ejecutarse por falta de Python utilizable. No se acredita CI remota, despliegue completo ni rendimiento de cámara con estas comprobaciones.
+
+**Pendientes:** integrar cuarenta referencias reales revisadas por especialista y el motor de evaluación. El inventario documental de cuarenta fuentes no equivale a cuarenta secuencias utilizables. La persistencia y exportación de ejecuciones tampoco están implementadas en la API actual.
+
+### Revisión de contratos 
+
+Los esquemas [referencia](data/schemas/referencia.schema.json) y [ejecución](data/schemas/ejecucion.schema.json) usan la versión `1.1.0`. Confirmar campos, lateralidad, unidades y límites temporales usando primero una referencia real por temática. El esquema de referencia exige ahora campos fonológicos adicionales sin cambio de versión: conciliar exportaciones anteriores antes de incorporar el lote. El validador local acepta fechas sin hora ni zona; esta limitación sigue pendiente y debe considerarse al contrastar con otro validador. `bun run validate:catalog` comprueba el catálogo de referencia, no muestras de ejecución ni la salida de un motor evaluador.
+
+- [Informe técnico consolidado](docs/informes/InformeTecnico.md)
 - [Decisiones de arquitectura](docs/adr)
 - [Inventario de fuentes LSEC](docs/datos/lote-1-lsec-conadis-2026-10-30.md)
 

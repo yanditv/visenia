@@ -1,12 +1,5 @@
 # ADR-002: Retargeting y Articulación del Avatar 3D VRM
 
-- **Estado:** Aprobado (Revisión v1.1)
-- **Fecha:** 2026-10-27
-- **Autor:** Desarrollador B (Lucas) / Coordinado con Desarrollador A (Mateo Pacheco)
-- **Requerimiento / Contexto:** ERS 8.1 / RF-42 (Sec. 7) / Three.js / @pixiv/three-vrm / Blender
-
----
-
 ## 1. Contexto y Problema
 
 Para la enseñanza interactiva y el catálogo de señas (RF-07, RF-42), el tutor virtual tridimensional debe:

@@ -1,12 +1,6 @@
-# VISEÑA · Informe de estado técnico y entregas necesarias del Programador A
+# VISEÑA · Informe de estado técnico
 
-**Fecha de corte:** 4 de noviembre de 2026.  
-**Proyecto:** VISEÑA · Universidad Católica de Cuenca · Fondo INVENTA.  
-**Periodo evaluado:** desarrollo local disponible hasta el Sprint 1.  
-**Versión de aplicación:** 0.1.0. **Base de implementación:** commit `5494f74`; rama de desarrollo `codex/RF-07-inicio-tematicas`; consultar el historial Git para el estado de su integración local.  
-**Objeto:** describir el funcionamiento técnico implementado, reconocer el lote documental existente y precisar qué se necesita de A para cargar referencias reales y continuar la evaluación automática.
-
-**Actualización:** incorpora la interfaz de doce temáticas y la verificación posterior de 34 pruebas aprobadas.
+Corte: **10 de noviembre de 2026**. Rama revisada: `Frontend-G0`. Commit de código: `3ba8621`. Este informe consolida el documento anterior del 4 de noviembre y los resúmenes de Semana 0 y Sprint 1 retirados en esta actualización.
 
 ## 1. Estado ejecutivo
 
@@ -20,21 +14,37 @@ En el checkout revisado no se encontró el paquete técnico de cuarenta referenc
 
 ## 2. Evidencia y alcance de la revisión
 
-Se inspeccionaron código fuente, modelos locales, datos públicos de la app, inventario documental, esquemas, ADR, pruebas y configuración de CI. También se ejecutaron `npm test` y `npm run build` el 4 de noviembre.
+Se inspeccionaron los ocho commits posteriores a `main` local (`64906de`), el código, esquemas, catálogo, infraestructura y documentación. Las comprobaciones siguientes se ejecutaron localmente el 10 de noviembre; el estado de CI remota no se verificó.
 
-| Verificación                              | Resultado observado                                                                                                                            |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pruebas automatizadas                     | 34 aprobadas, 0 fallos, 0 omitidas                                                                                                             |
-| Compilación TypeScript y empaquetado Vite | Correctos, código de salida 0                                                                                                                  |
-| Advertencia de empaquetado                | JavaScript principal de 862,99 kB; gzip 226,39 kB; supera el umbral de aviso de 500 kB                                                         |
-| Catálogo de producto                      | Tres demostraciones: HOLA (45 cuadros), GRACIAS (40) y POR FAVOR (48); HOLA en Saludos (unidad 1); GRACIAS y POR FAVOR en Cortesía (unidad 12) |
-| Inventario documental                     | 40 entradas, 40 IDs propuestos únicos, 40 fichas únicas y 40 IDs de video únicos; ninguna entrada contiene `frames`                            |
-| Directorios `motor/` y `tools/`           | No presentes en este checkout                                                                                                                  |
-| Service worker público `app/public/sw.js` | No presente                                                                                                                                    |
+| Comprobación               | Resultado observado                                                                                                                                              |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bun run test`             | 54 aprobadas, 0 fallos, 0 omitidas                                                                                                                               |
+| `bun run lint`             | Tipos TypeScript y sintaxis de scripts correctos                                                                                                                 |
+| `bun run validate:catalog` | Tres referencias de demostración válidas para el validador local                                                                                                 |
+| `bun run build`            | TypeScript y Vite correctos, salida 0                                                                                                                            |
+| Bundle principal           | 881,31 kB; gzip 232,26 kB; aviso de Vite por superar 500 kB                                                                                                      |
+| `bun run format:check`     | Correcto tras la actualización documental                                                                                                                        |
+| Docker Compose             | Configuración válida con `POSTGRES_PASSWORD=ci-config-only` solo para comprobar la configuración; servicios no levantados                                        |
+| Backend Python             | Pruebas no ejecutadas: el alias local de Python no puede iniciarse                                                                                               |
+| Catálogo                   | HOLA (45 cuadros), GRACIAS (40), POR FAVOR (48); tres demos sintéticas                                                                                           |
+| Offline                    | Service worker presente; pruebas automatizadas de caché, exclusiones y limpieza de versiones aprobadas; WASM local preparado por los scripts de desarrollo/build |
 
-Las pruebas incluyen lógica de movimiento, asociación de manos, encuadre, reproducción temporal, exportación de captura, separación guía/espejo y una comprobación de orientación de palma con el rig real. Varias pruebas utilizan dobles de DOM y detectores; no equivalen a una prueba física de cámara ni a una validación de lengua de señas. El mensaje de rechazo de catálogo que aparece durante `npm test` corresponde a un caso negativo esperado que pasó.
+Las pruebas cubren el rig real, reproducción temporal, validación/exportación, navegación por mapa, cargas tardías, reintentos, permisos denegados, pérdida de seguimiento y comportamiento del worker. Varias usan dobles de DOM, detectores y caché; no equivalen a validación lingüística, uso físico de cámara ni una sesión offline real en laboratorio.
 
-Se verificó en navegador la interfaz de temáticas, el avatar, MediaPipe, la reproducción y el espejo con simulación; también se comprobó la vista móvil. No se volvió a medir la cámara física, no se levantó Docker ni se comprobó CI remota en esta revisión. Lucas reportó previamente más de 24 fps: se conserva como rendimiento informado, pendiente de acompañar con equipo, resolución y registro de cinco minutos. No se reabrieron los cuarenta videos; el estado documental se comprobó en los archivos ya elaborados.
+La verificación visual del 4 de noviembre (escritorio, móvil y simulación) se conserva como antecedente. En el corte actual no se repitió esa revisión visual ni se midió la cámara; tampoco se ejecutó Caddy ni se acreditó conexión real a PostgreSQL. Lucas había reportado más de 24 fps: falta anexar equipo, resolución y registro reproducible de cinco minutos. No se volvieron a abrir los cuarenta videos.
+
+### Últimos commits incorporados
+
+| Commit    | Cambio relevante                                            |
+| --------- | ----------------------------------------------------------- |
+| `4d59d1d` | Migración a Bun y lockfile                                  |
+| `3c99183` | Consolidación documental de Frontend-G0                     |
+| `290550c` | Guía visual, textos es-EC, fuentes locales y preferencias   |
+| `1cb9d09` | Normalización de formato con Prettier                       |
+| `74811ba` | Mapa de niveles y coordinación del seguimiento              |
+| `3480a21` | Despliegue protegido y disponibilidad real de la API        |
+| `8d418f4` | Validación de referencias, anotación y recursos offline     |
+| `3ba8621` | CI para tipos, contratos, API y configuración de despliegue |
 
 ## 3. Funcionamiento técnico actual
 
@@ -51,7 +61,7 @@ Se verificó en navegador la interfaz de temáticas, el avatar, MediaPipe, la re
 - Rostro: subconjunto de puntos para dibujo y coeficientes de expresión facial.
 - Encuadre: comprobación de rostro, hombros y ambas manos, mantenidos durante un segundo para declarar encuadre válido.
 
-La inferencia ocurre en el navegador, configurada con delegado GPU. Los archivos `.task` están en `app/public/models/`; el runtime WASM se solicita actualmente a un CDN. Descargar los recursos no implica que el video se procese en ese CDN: las llamadas de detección reciben el video local del navegador.
+La inferencia ocurre en el navegador, configurada con delegado GPU. Los archivos `.task` están en `app/public/models/`; `prepare-vision.cjs` copia el runtime instalado de MediaPipe a `app/public/wasm/` antes de desarrollo y build. El flujo actual usa WASM local. Los detectores cargados se conservan al reintentar uno fallido y las llamadas concurrentes comparten la inicialización. El video se procesa en el navegador.
 
 [El bucle principal](../../app/src/main.ts) detecta cuando cambia `video.currentTime`, procesa ese cuadro y reutiliza la última detección en repintados posteriores. El contador de fps considera cuadros nuevos procesados, con una rama de simulación que debe excluirse de cualquier medición real.
 
@@ -86,15 +96,15 @@ La animación actual se centra en brazos, manos y esas expresiones. No se encont
 | Guía   | Secuencia del catálogo | El avatar y el esqueleto de referencia siguen los cuadros del JSON |
 | Espejo | Landmarks de cámara    | El avatar refleja los movimientos captados del usuario             |
 
-La aplicación separa ambos modos para que desplazar el reproductor no sobrescriba el reflejo en vivo. El inicio actual muestra doce temáticas y consulta el catálogo para presentar conteos. El VRM, MediaPipe y la cámara se preparan al entrar en una temática. Cada recurso tiene su estado y reintento; los modelos preparados se reutilizan y al volver se detienen cámara y bucles de animación. La cámara física permaneció pendiente de permiso durante la verificación visual.
+La aplicación separa ambos modos para que desplazar el reproductor no sobrescriba el reflejo en vivo. El inicio actual muestra doce temáticas y consulta el catálogo para presentar conteos. Seleccionar una temática abre su mapa sin iniciar cámara, VRM ni MediaPipe. Esos recursos se preparan al comenzar un nivel disponible. Cada recurso tiene su estado y reintento; los modelos preparados se reutilizan y al volver al mapa se detienen cámara y bucles de animación. Los cuadros detenidos y los errores de inferencia liberan el seguimiento y permiten recuperación.
 
 ### 3.6 Catálogo y reproducción
 
-[CatalogoPlayerService](../../app/src/catalogo/catalogo-service.ts) carga `/data/referencias-v1.json`, valida una estructura básica y marcas de tiempo crecientes, selecciona referencias y reproduce el segmento definido por sus límites. Implementa pausa, reinicio, desplazamiento, bucle, velocidades 1×/0,5× e interpolación temporal.
+[CatalogoPlayerService](../../app/src/catalogo/catalogo-service.ts) carga `/data/referencias-v1.json`, valida los campos anidados del esquema de referencia y las invariantes temporales y de animación, selecciona referencias y reproduce el segmento definido por sus límites. Implementa pausa, reinicio, desplazamiento, bucle, velocidades 1×/0,5× e interpolación temporal.
 
 Las tres entradas actuales son demostraciones. El código detecta manos sintéticas heredadas y usa una mano abierta anatómica de respaldo; una prueba confirma ese estado de demostración. No se deben contar esas entradas como tres referencias LSEC reales validadas.
 
-La selección visible se filtra por `unidad_tematica`. Las doce tarjetas llevan a la misma vista de espejo/avatar y muestran su catálogo correspondiente. Las unidades sin referencias permiten explorar el espejo, indican contenido próximo y deshabilitan los controles de guía; no reutilizan demostraciones de otra temática.
+La selección visible se filtra por `unidad_tematica`. Las doce tarjetas abren mapas de niveles filtrados por temática; seleccionar un nivel disponible permite comenzar la práctica compartida de espejo/avatar. Los espacios sin referencia aparecen inhabilitados y las temáticas vacías no abren cámara ni avatar. El mapa conserva la selección y se actualiza si el catálogo llega tarde.
 
 ### 3.7 Anotador y contratos
 
@@ -102,17 +112,21 @@ La selección visible se filtra por `unidad_tematica`. Las doce tarjetas llevan 
 
 Su recorte de una toma es una herramienta de anotación manual. No sustituye la segmentación automática del aprendiz ni demuestra que el lote de A haya sido segmentado.
 
-**Revisión pendiente:** el formulario y exportador usan valores predeterminados para orientación de palma, tolerancias, repeticiones, descripciones y una expresión facial de ejemplo. No todos son mediciones o etiquetas revisadas por especialista. La presencia de los cinco objetos fonológicos en un JSON no prueba que los cinco parámetros hayan sido anotados correctamente.
+El formulario usa los valores introducidos por el anotador y bloquea campos vacíos, vector de palma nulo, repeticiones inválidas, segmentos incorrectos y ausencia de objetivo facial cuando la expresión es requerida. El exportador recorta y reindexa el tramo, conserva su tiempo real, exige al menos 100 ms y valida el documento antes de descargarlo. Las tolerancias predeterminadas y la anotación deben revisarse con el especialista; la validez estructural no acredita corrección lingüística.
 
-Los [esquemas de referencia](../../data/schemas/referencia.schema.json) y [ejecución](../../data/schemas/ejecucion.schema.json) están disponibles. Son contratos para intercambio; el esquema de ejecución no significa que ya exista el motor que rellena puntajes y veredictos. La carga del catálogo hace comprobaciones parciales, no una validación exhaustiva de todos los requisitos del esquema y de calidad de datos.
+Los [esquemas de referencia](../../data/schemas/referencia.schema.json) y [ejecución](../../data/schemas/ejecucion.schema.json) están disponibles. Son contratos para intercambio; el esquema de ejecución no significa que ya exista el motor que rellena puntajes y veredictos. La carga y exportación reutilizan `validateReference`; el catálogo además rechaza IDs duplicados. Se verifican tipos, campos obligatorios, tamaños de pistas, orden temporal, segmentos, coherencia de fps/duración y coeficientes faciales. El esquema de ejecución sigue siendo un contrato pendiente de consumo por el motor.
+
+**Compatibilidad pendiente de acordar con A:** se añadieron campos fonológicos obligatorios al esquema de referencia sin modificar `schema_version: 1.1.0`; confirmar exportaciones previas antes de cargar el lote. Se reprodujo además que `fecha_anotacion: "2026-11-10"` pasa el validador porque usa `Date.parse`, aunque carece de hora y zona del formato `date-time`. La validación local no debe presentarse como certificación exhaustiva de JSON Schema; este defecto queda registrado, sin corregir código en esta actualización.
 
 ### 3.8 Backend, PWA y automatización
 
-El [backend FastAPI](../../server/main.py) dispone de `/api/health` y `/api/version`. No hay en el archivo actual persistencia de ejecuciones, exportación del banco, sincronización ni inferencia. `database_connected` refleja la presencia de una variable de entorno, no una consulta real de conexión a PostgreSQL.
+El [backend FastAPI](../../server/main.py) dispone de `/api/health`, `/api/ready` y `/api/version`. Salud indica vida del proceso; disponibilidad abre conexión PostgreSQL, ejecuta `SELECT 1` y devuelve 200 o 503. Las respuestas no exponen el error de conexión. CORS admite orígenes locales explícitos. No hay persistencia de ejecuciones, exportación del banco, sincronización ni inferencia. Existen cinco pruebas unitarias del backend, pendientes de ejecución en este entorno por falta de Python utilizable.
 
-Existe infraestructura declarada en Docker Compose y manifiesto web. El funcionamiento offline completo no está acreditado: se intenta registrar un service worker ausente y el WASM depende del CDN.
+Docker Compose exige una contraseña de PostgreSQL sin valor predeterminado; solo Caddy publica puertos. Caddy sirve `app/dist`, deriva API/OpenAPI al servidor y define tipos de contenido para WASM/modelos. La configuración Compose fue validada sin arrancar servicios.
 
-Hay [workflow de CI](../../.github/workflows/ci.yml) para formato, sintaxis de esquemas y pruebas. La comprobación de esquemas usa `JSON.parse`, que verifica sintaxis, no conformidad de referencias. En este informe solo se acreditan las pruebas y compilación locales ejecutadas, no el estado del pipeline remoto ni la cobertura de pruebas del motor.
+Existe manifiesto web y [service worker](../../app/public/sw.js). El build inyecta inventario y versión de caché para HTML, assets, fuentes, catálogo, modelos y WASM. El worker excluye API, otros orígenes, escrituras y recursos ajenos al build, y limpia cachés anteriores de Viseña. La disponibilidad offline exige cargar primero con red e instalar completamente el caché; las pruebas automatizadas no sustituyen la prueba física de instalación, permisos de cámara y recarga sin conexión. El servidor de desarrollo no genera ese inventario.
+
+El [workflow de CI](../../.github/workflows/ci.yml) instala dependencias con Bun y lockfile congelado, verifica formato, tipos/sintaxis, catálogo publicado, pruebas y build. Añade pruebas Python y validación de Compose/Caddy. Se ejecuta para push a `main` y PR dirigidos a `main`; publicar `Frontend-G0` por sí solo no activa este workflow. `validate:catalog` aplica el validador de referencias al catálogo publicado; no valida muestras de ejecución ni un motor todavía ausente. No se acredita aquí resultado remoto de CI.
 
 Los ADR describen también interfaces de fuentes abstractas y un adaptador del motor. No se encontraron sus implementaciones completas en el flujo revisado; sus afirmaciones se toman como decisiones/documentación y no como evidencia automática de integración.
 
@@ -193,10 +207,10 @@ OpenHands no está integrado. Su prueba experimental no sustituye las referencia
 
 ## 8. Trabajo de B que puede continuar ahora
 
-1. Inicio con doce temáticas implementado y verificado; mantener sus conteos asociados a las referencias realmente cargadas.
+1. Mantener las doce temáticas y el mapa asociados a las referencias realmente cargadas.
 2. Filtrado por unidad implementado; incorporar el paquete real sin cambiar esa navegación.
-3. Carga al ingresar, reintentos y apagado al volver implementados; completar la comprobación de cámara física con permiso y registrar rendimiento.
-4. Mantener el anotador disponible y revisar los valores predeterminados para que el especialista identifique qué debe completar.
+3. Carga al comenzar nivel, reintentos y apagado al volver implementados; completar la comprobación de cámara física con permiso y registrar rendimiento.
+4. Conciliar los campos obligatorios del esquema con A, corregir la validación de fecha y revisar tolerancias con el especialista.
 5. Preparar recepción de una referencia real por temática, con casos de tiempos, límites y cambio guía/espejo.
 6. Documentar rendimiento y realizar revisión del avatar con datos reales en cuanto lleguen.
 
@@ -209,7 +223,7 @@ La interfaz temática ya funciona con datos de prueba identificados como demostr
 | G0 · ≥24 fps en portátiles                         | Cumplimiento reportado por Lucas; falta anexar en este informe un registro reproducible de cinco minutos. La nueva revisión no lo midió otra vez.        |
 | G1 · 40 referencias anotadas y cargadas · 15 nov   | No acreditado todavía: existe documentación de cuarenta, pero el catálogo de producto contiene tres demos.                                               |
 | Base de B para Sprint 1                            | Cámara, puntos, esqueleto, VRM, movimiento, reproductor, anotador, temáticas, contratos y pruebas implementados; requieren integración con el lote real. |
-| Inicio por temáticas                               | Implementado: doce tarjetas, vista compartida, filtro por unidad y carga de recursos al ingresar.                                                        |
+| Inicio por temáticas                               | Implementado: doce tarjetas, mapas filtrados y carga de recursos al comenzar un nivel disponible.                                                        |
 | G2 · práctica completa con veredicto ≤300 ms       | Pendiente de motor y referencias reales; no medible aún como flujo completo.                                                                             |
 | RF-42 · avatar reconocible en ≥90 % de referencias | Mecanismo de animación disponible; aceptación lingüística no acreditada. Se desarrolla y valida progresivamente en fases posteriores.                    |
 
@@ -230,12 +244,12 @@ Para el cierre del 15 de noviembre, priorizar lote real anotado, carga versionad
 
 - [ADR-001: formato de puntos](../adr/ADR-001-formato-puntos-clave.md).
 - [ADR-002: avatar VRM](../adr/ADR-002-retargeting-avatar-vrm.md).
-- ERS original revisado en esta conversación: `C:/Users/lvsld/Downloads/VISENA_ERS_v1.0_UCACUE.md`; sus metas no sustituyen evidencia de implementación.
+- [ADR-003: fuentes de captura](../adr/ADR-003-fuente-abstracta-camara.md).
+- [README y comandos de desarrollo](../../README.md).
+- ERS v1.0: fuente externa citada por la documentación previa, no incluida en el repositorio ni revalidada en este corte. Sus metas no sustituyen evidencia de implementación.
 
-Informe actualizado mediante inspección y evidencias de la implementación local de temáticas. La actualización documental no añade cambios de producto ni modifica archivos o segmentación de A.
+La actualización consolida el informe en `InformeTecnico.md`, conserva la retirada de los resúmenes y del informe fechado, y mantiene la eliminación de los encabezados de estado/autoría de los tres ADR. Esos ADR documentan decisiones; sus afirmaciones de compatibilidad o rendimiento requieren comprobación y no certifican integración. Esta actualización no modifica el producto ni los datos o segmentación de A.
 
-## Verificación del inicio por temáticas
+## Antecedente de verificación visual · 4 de noviembre
 
 La verificación del 4 de noviembre comprobó doce tarjetas, regreso al inicio, filtrado de Saludos y Cortesía, reproducción, temática vacía y espejo con simulación. Avatar y seguimiento cargaron con los recursos reales. Se revisó la vista móvil a 390 × 844 y la de escritorio. El permiso de cámara física quedó pendiente. Las 34 pruebas cubrieron, entre otros casos, permisos denegados, reintentos, cargas tardías y cancelación de sesiones.
-
-Para cerrar G1, A debe confirmar el estado del lote de cuarenta referencias, entregar primero una referencia completa por temática y luego el paquete versionado con IDs, unidades, tiempos, límites, parámetros y procedencia LSEC. La integración utiliza el esquema 1.1.0 y requiere la revisión del especialista. La evaluación automatizada y el objetivo de latencia corresponden a G2.
