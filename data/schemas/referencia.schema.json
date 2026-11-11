@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://visenia.org/schemas/referencia.schema.json",
+  "title": "ReferenciaSena",
+  "description": "Contrato maestro para muestras de referencia de lengua de señas según ERS 6.1 (Tabla 6.1), optimizado para retargeting VRM (pose_world), blendshapes faciales y overrides de Blender (RF-42).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "glosa",
+    "unidad_tematica",
+    "mano_dominante",
+    "metadatos_grabacion",
+    "segmentacion",
+    "parametros_fonologicos",
+    "frames"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.1.0"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^ref-[a-z0-9-]+$"
+    },
+    "glosa": {
+      "type": "string",
+      "minLength": 1
+    },
+    "unidad_tematica": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 12
+    },
+    "dificultad": {
+      "type": "string",
+      "enum": ["facil", "intermedio", "avanzado"],
+      "default": "facil"
+    },
+    "mano_dominante": {
+      "type": "string",
+      "enum": ["derecha", "izquierda", "ambas"]
+    },
+    "metadatos_grabacion": {
+      "type": "object",
+      "required": ["fps", "total_frames", "duracion_ms", "anotador", "fecha_anotacion"],
+      "properties": {
+        "fps": { "type": "number", "minimum": 15 },
+        "total_frames": { "type": "integer", "minimum": 1 },
+        "duracion_ms": { "type": "number", "minimum": 100 },
+        "anotador": { "type": "string" },
+        "fecha_anotacion": { "type": "string", "format": "date-time" }
+      }
+    },
+    "segmentacion": {
+      "type": "object",
+      "required": ["frame_inicio_sena", "frame_fin_sena"],
+      "properties": {
+        "frame_inicio_preparacion": { "type": "integer", "minimum": 0 },
+        "frame_inicio_sena": { "type": "integer", "minimum": 0 },
+        "frame_fin_sena": { "type": "integer", "minimum": 0 },
+        "frame_retorno": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "parametros_fonologicos": {
+      "type": "object",
+      "description": "Anotación de los 5 parámetros formativos del signo realizada por el especialista.",
+      "required": [
+        "queirema_configuracion",
+        "kinema_orientacion",
+        "toponema_ubicacion",
+        "kinesema_movimiento",
+        "prosoponema_no_manual"
+      ],
+      "properties": {
+        "queirema_configuracion": {
+          "required": ["codigo_forma", "descripcion", "tolerancia_grados"],
+          "type": "object",
+          "description": "Configuración de la forma de la(s) mano(s)",
+          "properties": {
+            "codigo_forma": { "type": "string" },
+            "descripcion": { "type": "string" },
+            "tolerancia_grados": { "type": "number", "minimum": 0, "default": 20 }
+          }
+        },
+        "kinema_orientacion": {
+          "required": ["vector_palma", "tolerancia_grados"],
+          "type": "object",
+          "description": "Orientación de la palma y vector de dirección",
+          "properties": {
+            "vector_palma": {
+              "type": "array",
+              "items": { "type": "number" },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "tolerancia_grados": { "type": "number", "minimum": 0, "default": 25 }
+          }
+        },
+        "toponema_ubicacion": {
+          "required": ["zona_corporal", "tolerancia_radio"],
+          "type": "object",
+          "description": "Zona corporal o espacial donde se articula el signo",
+          "properties": {
+            "zona_corporal": {
+              "type": "string",
+              "enum": [
+                "neutro_espacio",
+                "cabeza",
+                "frente",
+                "pecho",
+                "barbilla",
+                "hombro",
+                "mano_base"
+              ]
+            },
+            "tolerancia_radio": { "type": "number", "minimum": 0, "default": 0.15 }
+          }
+        },
+        "kinesema_movimiento": {
+          "required": ["tipo_movimiento", "repeticiones"],
+          "type": "object",
+          "description": "Trayectoria, velocidad y repetición del movimiento",
+          "properties": {
+            "tipo_movimiento": {
+              "type": "string",
+              "enum": ["rectilineo", "curvo", "circular", "ondulatorio", "estatico"]
+            },
+            "repeticiones": { "type": "integer", "minimum": 0, "default": 0 }
+          }
+        },
+        "prosoponema_no_manual": {
+          "required": ["requerido"],
+          "type": "object",
+          "description": "Expresiones faciales y gestos corporales no manuales",
+          "properties": {
+            "requerido": { "type": "boolean", "default": false },
+            "blendshapes_clave": {
+              "type": "object",
+              "description": "Coeficientes objetivo de Shape Keys (ej. browInnerUp, jawOpen) para evaluación y VRoid",
+              "additionalProperties": { "type": "number" }
+            }
+          }
+        }
+      }
+    },
+    "frames": {
+      "type": "array",
+      "description": "Secuencia temporal de fotogramas capturados",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/FrameCaptura" }
+    }
+  },
+  "$defs": {
+    "Punto3D": {
+      "type": "object",
+      "required": ["x", "y", "z"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" }
+      }
+    },
+    "Punto3DVisibilidad": {
+      "type": "object",
+      "required": ["x", "y", "z"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" },
+        "visibility": { "type": "number" }
+      }
+    },
+    "FrameCaptura": {
+      "type": "object",
+      "required": ["frame_idx", "timestamp_ms"],
+      "properties": {
+        "frame_idx": { "type": "integer", "minimum": 0 },
+        "timestamp_ms": { "type": "number", "minimum": 0 },
+        "pose": {
+          "description": "33 landmarks normalizados [0.0, 1.0] para render en canvas 2D",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Punto3DVisibilidad" }
+        },
+        "pose_world": {
+          "description": "33 landmarks en metros reales (origen en centro de cadera) requeridos por three-vrm / Kalidokit",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Punto3DVisibilidad" }
+        },
+        "mano_derecha": {
+          "description": "21 landmarks normalizados de mano derecha",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Punto3D" }
+        },
+        "mano_izquierda": {
+          "description": "21 landmarks normalizados de mano izquierda",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Punto3D" }
+        },
+        "blendshapes_rostro": {
+          "description": "Mapa de coeficientes ARKit/MediaPipe (0.0 a 1.0) para animar Shape Keys de VRoid/Blender y evaluar prosoponema",
+          "type": "object",
+          "additionalProperties": { "type": "number" }
+        },
+        "rostro": {
+          "description": "Opcional: subconjunto de puntos faciales {x,y,z} solo si el motor de Mateo no usa blendshapes",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Punto3D" }
+        },
+        "vrm_pose_override": {
+          "description": "Opcional (RF-42): Rotaciones en cuaterniones [x,y,z,w] exportadas desde Blender para corregir oclusiones de MediaPipe",
+          "type": ["object", "null"],
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 4,
+            "maxItems": 4
+          }
+        }
+      }
+    }
+  }
+}

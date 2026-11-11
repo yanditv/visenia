@@ -10,6 +10,9 @@ node_modules/
 dist/
 build/
 .cache/
+.vite/
+app/.vite/
+app/public/wasm/
 coverage/
 .turbo/
 .eslintcache

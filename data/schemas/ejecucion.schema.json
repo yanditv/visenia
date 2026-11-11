@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://visenia.org/schemas/ejecucion.schema.json",
+  "title": "EjecucionUsuario",
+  "description": "Contrato para capturas y veredictos de ejecución de señas por parte del usuario según ERS 6.2 (Tabla 6.2), con soporte para pose_world, blendshapes faciales y resaltado visual de zonas erróneas (RF-20).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id_ejecucion",
+    "id_referencia",
+    "timestamp_utc",
+    "modo",
+    "diagnostico_tecnico",
+    "senales_segmentacion",
+    "resultado",
+    "frames_ejecucion"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.1.0"
+    },
+    "id_ejecucion": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "id_referencia": {
+      "type": "string",
+      "pattern": "^ref-[a-z0-9-]+$"
+    },
+    "codigo_participante": {
+      "type": ["string", "null"],
+      "description": "Identificador seudónimo (RF-33) o null si es modo libre/anónimo."
+    },
+    "timestamp_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "modo": {
+      "type": "string",
+      "enum": ["practica_libre", "investigacion_pin", "kiosco"]
+    },
+    "diagnostico_tecnico": {
+      "type": "object",
+      "required": ["fps_promedio", "latencia_veredicto_ms", "calidad_encuadre"],
+      "properties": {
+        "fps_promedio": { "type": "number", "minimum": 0 },
+        "latencia_veredicto_ms": { "type": "number", "minimum": 0 },
+        "calidad_encuadre": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "senales_segmentacion": {
+      "type": "object",
+      "required": ["timestamp_encuadre_valido", "timestamp_inicio_sena", "timestamp_fin_sena"],
+      "properties": {
+        "timestamp_encuadre_valido": { "type": "number" },
+        "timestamp_inicio_sena": { "type": "number" },
+        "timestamp_fin_sena": { "type": "number" }
+      }
+    },
+    "resultado": {
+      "type": "object",
+      "required": ["puntaje_global", "estrellas", "veredicto_aprobado", "parametros_evaluados"],
+      "properties": {
+        "puntaje_global": { "type": "number", "minimum": 0, "maximum": 100 },
+        "estrellas": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "veredicto_aprobado": { "type": "boolean" },
+        "parametros_evaluados": {
+          "type": "object",
+          "required": [
+            "queirema_configuracion",
+            "kinema_orientacion",
+            "toponema_ubicacion",
+            "kinesema_movimiento",
+            "prosoponema_no_manual"
+          ],
+          "properties": {
+            "queirema_configuracion": { "$ref": "#/$defs/EstadoParametro" },
+            "kinema_orientacion": { "$ref": "#/$defs/EstadoParametro" },
+            "toponema_ubicacion": { "$ref": "#/$defs/EstadoParametro" },
+            "kinesema_movimiento": { "$ref": "#/$defs/EstadoParametro" },
+            "prosoponema_no_manual": { "$ref": "#/$defs/EstadoParametro" }
+          }
+        }
+      }
+    },
+    "frames_ejecucion": {
+      "type": "array",
+      "description": "Secuencia temporal de landmarks y blendshapes capturados durante el gesto del usuario (sin video en bruto).",
+      "items": { "$ref": "#/$defs/FrameCaptura" }
+    }
+  },
+  "$defs": {
+    "Punto3D": {
+      "type": "object",
+      "required": ["x", "y", "z"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" }
+      }
+    },
+    "Punto3DVisibilidad": {
+      "type": "object",
+      "required": ["x", "y", "z"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" },
+        "visibility": { "type": "number" }
+      }
+    },
+    "FrameCaptura": {
+      "type": "object",
+      "required": ["frame_idx", "timestamp_ms"],
+      "properties": {
+        "frame_idx": { "type": "integer", "minimum": 0 },
+        "timestamp_ms": { "type": "number", "minimum": 0 },
+        "pose": {
+          "description": "33 landmarks normalizados [0.0, 1.0] para render en canvas 2D",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Punto3DVisibilidad" }
+        },
+        "pose_world": {
+          "description": "33 landmarks en metros reales (origen en centro de cadera) requeridos por three-vrm / Kalidokit",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Punto3DVisibilidad" }
+        },
+        "mano_derecha": {
+          "description": "21 landmarks normalizados de mano derecha",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Punto3D" }
+        },
+        "mano_izquierda": {
+          "description": "21 landmarks normalizados de mano izquierda",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Punto3D" }
+        },
+        "blendshapes_rostro": {
+          "description": "Mapa de coeficientes ARKit/MediaPipe (0.0 a 1.0) para evaluar prosoponema y registrar expresiones en investigación",
+          "type": "object",
+          "additionalProperties": { "type": "number" }
+        },
+        "rostro": {
+          "description": "Opcional: subconjunto de puntos faciales {x,y,z}",
+          "type": "array",
+          "items": { "$ref": "#/$defs/Punto3D" }
+        },
+        "vrm_pose_override": {
+          "description": "Opcional (RF-42): Cuaterniones [x,y,z,w] en caso de corrección",
+          "type": ["object", "null"],
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 4,
+            "maxItems": 4
+          }
+        }
+      }
+    },
+    "EstadoParametro": {
+      "type": "object",
+      "required": ["estado", "desviacion"],
+      "properties": {
+        "estado": {
+          "type": "string",
+          "enum": ["verde", "amarillo", "rojo"]
+        },
+        "desviacion": {
+          "type": "number",
+          "description": "Distancia o error relativo respecto a la referencia (0.0 = coincidencia exacta)."
+        },
+        "mensaje_feedback": {
+          "type": "string",
+          "description": "Texto accesible breve para sugerencia de corrección visual (RF-19)."
+        },
+        "zonas_resaltar": {
+          "type": "array",
+          "description": "Zonas o articulaciones anatómicas a resaltar en el canvas según RF-20.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "mano_derecha",
+              "mano_izquierda",
+              "ambas_manos",
+              "dedos_mano_derecha",
+              "dedos_mano_izquierda",
+              "antebrazo_derecho",
+              "antebrazo_izquierdo",
+              "hombro_derecho",
+              "hombro_izquierdo",
+              "torso",
+              "cabeza",
+              "rostro"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
