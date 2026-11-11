@@ -23,6 +23,7 @@ __pycache__/
 env/
 venv/
 .venv/
+.venv-openhands/
 build/
 develop-eggs/
 dist/
@@ -64,3 +65,9 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# IA Models
+models/
+
+# Data
+**/data
