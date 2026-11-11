@@ -1,0 +1,42 @@
+{
+    # Administracion y certificados internos para desarrollo local HTTPS (ERS 3.4)
+    local_certs
+}
+
+localhost, visenia.local {
+    tls internal
+
+    # Proxy para API backend FastAPI
+    handle /api/* {
+        reverse_proxy api:8000
+    }
+
+    # Documentacion OpenAPI
+    handle /docs* {
+        reverse_proxy api:8000
+    }
+
+    handle /openapi.json {
+        reverse_proxy api:8000
+    }
+
+    # Frontend compilado; los recursos inexistentes no deben responder con HTML.
+    handle {
+        root * /srv
+        @wasm path *.wasm
+        header @wasm Content-Type application/wasm
+        @models path *.task *.tflite *.bin
+        header @models Content-Type application/octet-stream
+        @gltf path *.vrm *.glb
+        header @gltf Content-Type model/gltf-binary
+        @navigation {
+            header Accept *text/html*
+            not path /assets/* /models/* /wasm/* /mediapipe/* *.*
+            file {
+                try_files {path} /index.html
+            }
+        }
+        rewrite @navigation {file_match.relative}
+        file_server
+    }
+}
