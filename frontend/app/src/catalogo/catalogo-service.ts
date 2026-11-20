@@ -25,15 +25,37 @@ export class CatalogoPlayerService {
   private playbackTimeMs = 0;
   private isLoaded: boolean = false;
 
-  public async loadCatalog(
-    url: string = '/data/referencias-v1.json'
-  ): Promise<ReferenciaSenaData[]> {
+  private async publishedCatalog(): Promise<ReferenciaSenaData[]> {
+    const url = '/api/v1/lsec/referencias';
+    const cache =
+      typeof caches === 'undefined'
+        ? undefined
+        : await caches.open('lsec-referencias-publicadas-v1').catch(() => undefined);
+    let response: Response | undefined;
     try {
-      const res = await fetch(url);
-      if (!res.ok) {
-        throw new Error(`Error HTTP ${res.status} al cargar catálogo de señas.`);
+      response = await fetch(url, { signal: AbortSignal.timeout(4000), cache: 'no-store' });
+    } catch {
+      // Una sesión sin red puede reproducir la última publicación verificada.
+    }
+    if (!response?.ok || response.headers?.get('content-type')?.includes('text/html')) {
+      response = await cache?.match(url).catch(() => undefined);
+      if (!response) return [];
+    }
+    const backup = cache ? response.clone() : undefined;
+    const rows: unknown = await response.json();
+    validateCatalog(rows);
+    if (cache && backup) await cache.put(url, backup).catch(() => undefined);
+    return rows;
+  }
+
+  public async loadCatalog(url?: string): Promise<ReferenciaSenaData[]> {
+    try {
+      let data: unknown = url ? [] : await this.publishedCatalog();
+      if (Array.isArray(data) && !data.length) {
+        const res = await fetch(url ?? '/data/referencias-v1.json');
+        if (!res.ok) throw new Error(`Error HTTP ${res.status} al cargar catálogo de señas.`);
+        data = await res.json();
       }
-      const data: unknown = await res.json();
       validateCatalog(data);
       this.catalogo = data;
       this.selectedSena = null;

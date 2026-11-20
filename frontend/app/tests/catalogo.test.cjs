@@ -146,6 +146,12 @@ test('catálogo publicado carga y rechaza corrupción anidada antes de reproduci
   assert.equal((await c.loadCatalog()).length, references.length);
   const corruptions = [
     (s) => {
+      s.metadatos_grabacion.fecha_anotacion = '2026-11-20';
+    },
+    (s) => {
+      s.metadatos_grabacion.fecha_anotacion = '2026-02-30T12:00:00Z';
+    },
+    (s) => {
       s.parametros_fonologicos = {};
     },
     (s) => {
@@ -216,4 +222,33 @@ test('catálogo inválido falla con estado descargado', async (t) => {
   const c = new CatalogoPlayerService();
   assert.deepEqual(await c.loadCatalog(), []);
   assert.equal(c.getIsLoaded(), false);
+});
+
+test('el catálogo prioriza publicaciones y recupera la última copia válida sin red', async (t) => {
+  const stored = new Map();
+  t.mock.method(global, 'fetch', async (url) => {
+    if (!online) throw new TypeError('sin red');
+    return Response.json(url === '/api/v1/lsec/referencias' ? active : references);
+  });
+  const previous = global.caches;
+  global.caches = {
+    open: async () => ({
+      put: async (key, response) => stored.set(key, response),
+      match: async (key) => stored.get(key)?.clone(),
+    }),
+  };
+  t.after(() => {
+    if (previous) global.caches = previous;
+    else delete global.caches;
+  });
+  let online = true;
+  let active = [references[1]];
+  const service = new CatalogoPlayerService();
+  assert.deepEqual(await service.loadCatalog(), active);
+  online = false;
+  assert.deepEqual(await service.loadCatalog(), active);
+  online = true;
+  active = [];
+  assert.deepEqual(await service.loadCatalog(), references);
+  assert.deepEqual(await stored.get('/api/v1/lsec/referencias').json(), []);
 });

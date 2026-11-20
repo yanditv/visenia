@@ -8,6 +8,9 @@ localhost, visenia.local {
 
     # Proxy para API backend FastAPI
     handle /api/* {
+        # La práctica LSEC transmite únicamente landmarks al backend.
+        @legacyVideo path /api/v1/videos/* /api/v1/recognitions /api/v1/visena/analyze
+        respond @legacyVideo 404
         reverse_proxy api:8000
     }
 

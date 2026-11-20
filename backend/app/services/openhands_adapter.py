@@ -22,6 +22,53 @@ KEYPOINT_INDICES = [
 ]
 
 
+def adapt_sequence(sequence, target_frames=None, active_hand=None):
+    """Convert a capture to the checkpoint's input.
+
+    The WLASL BERT checkpoint uniformly samples 120 frames *before*
+    shoulder normalization. Match that order, including repeated indices for
+    short clips, instead of interpolating landmarks or padding with zeros.
+    """
+    keypoints = np.concatenate(
+        [sequence.pose, sequence.left_hand, sequence.right_hand], axis=1)
+    if keypoints.ndim != 3 or keypoints.shape[1:] != (75, 3):
+        raise ValueError("Forma de landmarks incompatible con OpenHands.")
+    if len(keypoints) < 4:
+        raise ValueError("Se requieren al menos 4 fotogramas.")
+    if active_hand is not None:
+        if active_hand not in ("left", "right"):
+            raise ValueError("La mano activa debe ser left o right.")
+        # For a one-handed practice target, suppress the other hand before
+        # normalization. Missing points follow the checkpoint's zero fill.
+        opposite = slice(54, 75) if active_hand == "left" else slice(33, 54)
+        keypoints = keypoints.copy()
+        keypoints[:, opposite, :] = np.nan
+    if target_frames is not None:
+        if target_frames < 4:
+            raise ValueError("Cantidad de fotogramas objetivo inválida.")
+        indices = np.linspace(0, len(keypoints) - 1, target_frames).astype(np.int64)
+        keypoints = keypoints[indices]
+    xy = keypoints[:, :, :2]
+    original_mask = np.isfinite(xy).all(axis=2)
+    valid_shoulders = original_mask[:, 11] & original_mask[:, 12]
+    if not valid_shoulders.any():
+        raise ValueError("No hay hombros válidos para normalizar.")
+    shoulders = xy[valid_shoulders]
+    center = ((shoulders[:, 11] + shoulders[:, 12]) / 2).mean(axis=0)
+    scale = float(np.linalg.norm(
+        shoulders[:, 11] - shoulders[:, 12], axis=1).mean())
+    if not np.isfinite(scale) or scale <= 1e-6:
+        raise ValueError("Escala corporal inválida.")
+    selected = np.nan_to_num(xy[:, KEYPOINT_INDICES], nan=0.0,
+                             posinf=0.0, neginf=0.0)
+    normalized = (selected - center) / scale
+    frames = np.transpose(normalized, (2, 0, 1)).astype(np.float32)
+    mask = original_mask[:, KEYPOINT_INDICES]
+    if not np.isfinite(frames).all():
+        raise ValueError("Entrada OpenHands no finita.")
+    return frames, mask
+
+
 def adapt_for_openhands(processing_id: str):
     uid = UUID(processing_id).hex
 

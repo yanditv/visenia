@@ -181,6 +181,7 @@ exports.boot = (options = {}) => {
     }
   }
   const modules = {
+    './practica-lsec': load('src/practica-lsec.ts'),
     '../ui/mapa': load('ui/mapa.ts'),
     '../i18n/es-EC/mensajes': require('./load-ts.cjs')('i18n/es-EC/mensajes.ts'),
     './camera/camera-service': { CameraService: Camera },

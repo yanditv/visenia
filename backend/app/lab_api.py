@@ -4,27 +4,12 @@ ERS 3.4 (Tabla 3.3) / RF-34
 """
 import os
 import psycopg2
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-app = FastAPI(
-    title="Viseña API - Servidor de Laboratorio",
-    description="Servicios de sincronización y almacenamiento de métricas de ejecución (INVENTA)",
-    version="0.1.0"
-)
+router = APIRouter(prefix="/api", tags=["Laboratorio"])
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[origin.strip() for origin in os.getenv(
-        "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,https://localhost,https://visenia.local"
-    ).split(",") if origin.strip()],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.get("/api/health")
+@router.get("/health")
 def health_check():
     return {
         "status": "healthy",
@@ -33,7 +18,7 @@ def health_check():
     }
 
 
-@app.get("/api/ready")
+@router.get("/ready")
 def readiness_check():
     connected = False
     database_url = os.getenv("DATABASE_URL")
@@ -57,7 +42,7 @@ def readiness_check():
                  "database_connected": connected},
     )
 
-@app.get("/api/version")
+@router.get("/version")
 def version():
     return {
         "app": "Viseña",

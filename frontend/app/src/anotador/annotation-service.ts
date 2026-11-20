@@ -123,7 +123,7 @@ function validateSchema(value: unknown, schema: Schema, path: string): void {
     typeof value === 'string' &&
     ((schema.minLength !== undefined && value.length < schema.minLength) ||
       (schema.pattern && !new RegExp(schema.pattern).test(value)) ||
-      (schema.format === 'date-time' && !Number.isFinite(Date.parse(value))))
+      (schema.format === 'date-time' && !fechaConZonaValida(value)))
   )
     fail();
   if (Array.isArray(value)) {
@@ -154,6 +154,16 @@ export function isLegacyDemoHand(hand: FrameCapturaSchema['mano_derecha']): bool
         Math.abs(p.y - hand[0].y - Math.floor(i / 5) * 0.02) < 1e-7
     )
   );
+}
+
+function fechaConZonaValida(value: string): boolean {
+  const date =
+    /^(\d{4})-(\d{2})-(\d{2})T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/i.exec(
+      value
+    );
+  if (!date || !Number.isFinite(Date.parse(value))) return false;
+  const day = Number(date[3]);
+  return new Date(`${date[1]}-${date[2]}-${date[3]}T00:00:00Z`).getUTCDate() === day;
 }
 
 export function validateReference(value: unknown): asserts value is ReferenciaSenaData {

@@ -1,0 +1,12 @@
+*
+!backend/
+!backend/app/
+!backend/app/**
+backend/app/**/__pycache__/
+!backend/requirements.txt
+!frontend/
+!frontend/data/
+!frontend/data/schemas/
+!frontend/data/schemas/*.json
+!frontend/docs/
+!frontend/docs/lote-1-lsec-conadis-2026-10-30.json

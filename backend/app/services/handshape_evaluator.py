@@ -37,8 +37,8 @@ JOINTS = np.array([
 ])
 
 
-def calculate_angles(hand):
-    points = hand[:, :, :2]
+def calculate_angles(hand, dimensions=2):
+    points = hand[:, :, :dimensions]
 
     a = points[:, JOINTS[:, 0], :]
     b = points[:, JOINTS[:, 1], :]
