@@ -95,6 +95,8 @@ def find_nearest(
 
             matches.append({
                 "reference_id": reference_id,
+                "ref_start": ref_start,
+                "ref_end": ref_end,
                 "distance": float(distance),
                 "verified_lsec": verified,
                 "evaluation_status": result["status"],

@@ -80,7 +80,11 @@ class RNNClassifier(nn.Module):
             input_size=54,
             hidden_size=128,
             num_layers=2,
-            bidirectional=True
+            bidirectional=True,
+            # Preserve the historical OpenHands decoder used by this checkpoint.
+            # Upstream leaves batch_first=False, even though PoseFlattener emits
+            # (B, T, F). Changing that flag changes the meaning of trained weights.
+            batch_first=False
         )
 
         self.attn_block = AttentionBlock(256)
@@ -174,18 +178,9 @@ def load_labels():
     )
 
 
-def predict(processing_id):
-    uid = UUID(processing_id).hex
-
-    input_file = INPUT_DIR / f"{uid}.npz"
-
-    if not input_file.is_file():
-        raise FileNotFoundError(input_file)
-
-    with np.load(input_file) as data:
-        frames = data["frames"].astype(np.float32)
-        mask = data["mask"].astype(bool)
-
+def predict_arrays(frames, mask, target_gloss=None, processing_id=None):
+    frames = np.asarray(frames, dtype=np.float32)
+    mask = np.asarray(mask, dtype=bool)
     if frames.ndim != 3 or frames.shape[0] != 2:
         raise ValueError("Canales invalidos.")
 
@@ -197,6 +192,8 @@ def predict(processing_id):
 
     if not np.isfinite(frames).all():
         raise ValueError("Entrada no finita.")
+    if frames.shape[1] < 4:
+        raise ValueError("Se requieren al menos 4 fotogramas.")
 
     device = torch.device(
         "cuda" if torch.cuda.is_available() else "cpu"
@@ -209,6 +206,8 @@ def predict(processing_id):
 
     if len(labels) != 2000:
         raise ValueError("Etiquetas incompatibles.")
+    if target_gloss is not None and target_gloss not in labels:
+        raise ValueError("Glosa ASL no reconocida por WLASL.")
 
     # Agregar dimensión del batch.
     x = torch.from_numpy(
@@ -240,21 +239,41 @@ def predict(processing_id):
 
     return {
         "status": "success",
-        "processing_id": uid,
+        "processing_id": processing_id,
         "device": str(device),
         "input_shape": list(x.shape),
         "classes": len(labels),
+        "target_gloss": target_gloss,
+        "target_probability": (
+            float(probabilities[0, labels.index(target_gloss)].item())
+            if target_gloss is not None else None
+        ),
         "predictions": predictions
     }
 
 
+def predict(processing_id):
+    uid = UUID(processing_id).hex
+    input_file = INPUT_DIR / f"{uid}.npz"
+    if not input_file.is_file():
+        raise FileNotFoundError(input_file)
+    with np.load(input_file) as data:
+        frames = data["frames"].astype(np.float32)
+        mask = data["mask"].astype(bool)
+    return predict_arrays(frames, mask, processing_id=uid)
+
+
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        raise SystemExit(
-            "Uso: python infer_openhands.py <id>"
+        raise SystemExit("Uso: python infer_openhands.py <id|--stdin>")
+    if sys.argv[1] == "--stdin":
+        payload = json.load(sys.stdin)
+        result = predict_arrays(
+            payload["frames"], payload["mask"],
+            target_gloss=payload["target_gloss"]
         )
-
-    result = predict(sys.argv[1])
+    else:
+        result = predict(sys.argv[1])
 
     print(json.dumps(
         result,

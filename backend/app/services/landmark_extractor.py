@@ -13,7 +13,7 @@ MODEL_PATH = (
 )
 
 
-def create_landmarker():
+def create_landmarker(min_hand_landmarks_confidence: float = 0.5):
     if not MODEL_PATH.is_file():
         raise FileNotFoundError(
             f"No se encuentra el modelo: {MODEL_PATH}"
@@ -26,7 +26,7 @@ def create_landmarker():
         running_mode=mp.tasks.vision.RunningMode.VIDEO,
         min_face_detection_confidence=0.5,
         min_pose_detection_confidence=0.5,
-        min_hand_landmarks_confidence=0.5
+        min_hand_landmarks_confidence=min_hand_landmarks_confidence
     )
 
     return mp.tasks.vision.HolisticLandmarker.create_from_options(
