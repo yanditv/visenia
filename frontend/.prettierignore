@@ -1,0 +1,7 @@
+node_modules
+dist
+build
+coverage
+deploy/pgdata
+deploy/caddy_data
+deploy/caddy_config
