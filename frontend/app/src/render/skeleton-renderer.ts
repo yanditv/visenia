@@ -6,6 +6,8 @@
  * - Contorno facial (cejas, ojos, labios) para expresión prosoponémica
  */
 
+import type { Zona } from '../../../../frontend-contract/visena-lsec.types';
+
 export interface LandmarkPoint {
   x: number; // Normalizado 0.0 a 1.0 (o metros en pose_world)
   y: number; // Normalizado 0.0 a 1.0 (o metros en pose_world)
@@ -94,14 +96,14 @@ export class SkeletonRenderer {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }
 
-  public render(landmarks: HolisticFrameLandmarks): void {
+  public render(landmarks: HolisticFrameLandmarks, colores?: ReadonlyMap<Zona, string>): void {
     this.clear();
     const w = this.canvas.width;
     const h = this.canvas.height;
 
     // 1. Renderizar Rostro (Contorno y Expresión)
     if (landmarks.face && landmarks.face.length > 0) {
-      this.drawPoints(landmarks.face, '#f472b6', 2.5, w, h);
+      this.drawPoints(landmarks.face, colores?.get('rostro') ?? '#f472b6', 2.5, w, h);
     }
 
     // 2. Renderizar Pose (Torso y Brazos)
@@ -141,14 +143,40 @@ export class SkeletonRenderer {
 
     // 3. Renderizar Mano Izquierda
     if (landmarks.leftHand && landmarks.leftHand.length === 21) {
-      this.drawConnections(landmarks.leftHand, HAND_CONNECTIONS, '#5eead4', 2, w, h);
-      this.drawPoints(landmarks.leftHand, '#ffffff', 3.5, w, h);
+      this.drawConnections(
+        landmarks.leftHand,
+        HAND_CONNECTIONS,
+        colores?.get('mano_izquierda') ?? '#5eead4',
+        2,
+        w,
+        h
+      );
+      this.drawPoints(
+        landmarks.leftHand,
+        colores?.get('dedos_mano_izquierda') ?? '#ffffff',
+        3.5,
+        w,
+        h
+      );
     }
 
     // 4. Renderizar Mano Derecha
     if (landmarks.rightHand && landmarks.rightHand.length === 21) {
-      this.drawConnections(landmarks.rightHand, HAND_CONNECTIONS, '#5eead4', 2, w, h);
-      this.drawPoints(landmarks.rightHand, '#ffffff', 3.5, w, h);
+      this.drawConnections(
+        landmarks.rightHand,
+        HAND_CONNECTIONS,
+        colores?.get('mano_derecha') ?? '#5eead4',
+        2,
+        w,
+        h
+      );
+      this.drawPoints(
+        landmarks.rightHand,
+        colores?.get('dedos_mano_derecha') ?? '#ffffff',
+        3.5,
+        w,
+        h
+      );
     }
   }
 

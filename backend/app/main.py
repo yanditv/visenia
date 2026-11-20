@@ -5,6 +5,7 @@ from pathlib import Path
 import math
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.services.video_processor import process_video
 
@@ -49,12 +50,24 @@ from fastapi import Form
 from app.services.visena_pipeline import analyze_video
 from app.websocket.visena_ws import router as realtime_router
 from app.websocket.visena_asl_ws import router as asl_router
+from app.lab_api import router as lab_router
+from app.lsec_api import router as lsec_router
 
 app = FastAPI(
     title="VISENA API",
     description="Reconocimiento y evaluación de señas LSEC",
     version="0.1.0"
 )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in os.getenv(
+        "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,https://localhost,https://visenia.local"
+    ).split(",") if origin.strip()],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.include_router(lab_router)
+app.include_router(lsec_router)
 app.include_router(realtime_router)
 app.include_router(asl_router)
 if os.getenv("VISENA_ENABLE_MANUAL_TEST") == "1":

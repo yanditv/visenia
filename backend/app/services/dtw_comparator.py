@@ -116,26 +116,21 @@ def dtw_distance(
     for i in range(1, n + 1):
         j_min = max(1, i - band)
         j_max = min(m, i + band)
+        distances = np.linalg.norm(reference[i - 1] - candidate[j_min - 1:j_max], axis=1)
 
-        for j in range(j_min, j_max + 1):
-            distance = np.linalg.norm(
-                reference[i - 1] - candidate[j - 1]
-            )
+        for j, distance in enumerate(distances, start=j_min):
+            above = costs[i - 1, j]
+            left = costs[i, j - 1]
+            diagonal = costs[i - 1, j - 1]
+            # Preserve the predecessor order on ties.
+            if above <= left and above <= diagonal:
+                best_i, best_j = i - 1, j
+            elif left <= diagonal:
+                best_i, best_j = i, j - 1
+            else:
+                best_i, best_j = i - 1, j - 1
 
-            neighbors = [
-                (i - 1, j),
-                (i, j - 1),
-                (i - 1, j - 1)
-            ]
-
-            best_i, best_j = min(
-                neighbors,
-                key=lambda pos: costs[pos]
-            )
-
-            if not np.isfinite(
-                costs[best_i, best_j]
-            ):
+            if not np.isfinite(costs[best_i, best_j]):
                 continue
 
             costs[i, j] = (

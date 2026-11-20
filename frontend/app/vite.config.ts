@@ -58,6 +58,12 @@ export default defineConfig({
     },
   },
   server: {
+    proxy: {
+      '/api': {
+        target: process.env.VISENA_API_ORIGIN ?? 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+    },
     port: 5173,
     host: '127.0.0.1',
     watch: {

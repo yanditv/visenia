@@ -2,6 +2,7 @@ node_modules
 dist
 build
 coverage
+app/public/wasm
 deploy/pgdata
 deploy/caddy_data
 deploy/caddy_config

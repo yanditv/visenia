@@ -16,14 +16,16 @@ services:
 
   api:
     build:
-      context: ../server
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: backend/Dockerfile
     container_name: visenia-fastapi-backend
     restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-visenia}:${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en deploy/.env}@db:5432/${POSTGRES_DB:-visenia_db}
       - ENVIRONMENT=development
-      - PORT=8000
+      - VISENA_LSEC_DRAFTS=${VISENA_LSEC_DRAFTS:-}
+    volumes:
+      - ../../backend/data/lsec:/workspace/backend/data/lsec:ro
     depends_on:
       db:
         condition: service_healthy

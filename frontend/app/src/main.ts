@@ -15,6 +15,8 @@ import { SkeletonRenderer, HolisticFrameLandmarks } from './render/skeleton-rend
 import { VisionService } from './vision/vision-service';
 import { VrmAvatarViewer, VRM_MODEL_URL } from './avatar/vrm-loader-spike';
 import { AnnotationService } from './anotador/annotation-service';
+import { PracticaLsec } from './practica-lsec';
+import type { IdReferencia } from '../../../frontend-contract/visena-lsec.types';
 import { CatalogoPlayerService } from './catalogo/catalogo-service';
 
 // ─── Referencias del DOM: Espejo y HUD ──────────────────────────────────────
@@ -102,6 +104,26 @@ referenceRenderer.resize(640, 480);
 const referenceStatus = document.getElementById('reference-status') as HTMLSpanElement;
 const annotationService = new AnnotationService();
 const catalogoService = new CatalogoPlayerService();
+const probarSena = document.getElementById('probar-sena') as HTMLButtonElement;
+const practicaLsec = new PracticaLsec(probarSena, document.getElementById('resultado-lsec')!);
+probarSena.addEventListener('click', () => {
+  const ref = catalogoService.getSelectedSena();
+  const mano = (document.getElementById('preferred-hand') as HTMLSelectElement)?.value;
+  return practicaLsec.activar(
+    cameraService.isRunning() && !isSimulating && visionService.getReadyStatus() && !visionFaulted,
+    video.videoWidth,
+    video.videoHeight,
+    ref && !catalogoService.isDemo(ref) ? (ref.id as IdReferencia) : undefined,
+    mano === 'izquierda' || mano === 'derecha' ? mano : undefined
+  );
+});
+window.addEventListener(
+  'visibilitychange',
+  () => {
+    if (document.hidden) practicaLsec.cancelar();
+  },
+  true
+);
 
 let avatarViewer: VrmAvatarViewer | null = null;
 let avatarLoad: Promise<unknown> | null = null;
@@ -378,6 +400,7 @@ async function enterTheme(unit: number, referenceId?: string): Promise<void> {
 }
 
 backToThemes.addEventListener('click', () => {
+  practicaLsec.cancelar();
   if (annotationService.getIsRecording()) btnRecordSena.click();
   activeUnit = null;
   sessionId++;
@@ -430,6 +453,7 @@ function updateFonologiaDisplay(): void {
 }
 
 selectCatalogoSena.addEventListener('change', () => {
+  practicaLsec.cancelar();
   avatarViewer?.resetPose();
   catalogoService.selectSena(selectCatalogoSena.value);
   updateFonologiaDisplay();
@@ -564,6 +588,7 @@ function animationLoop(timestamp: number) {
           lastDetectionAt = timestamp;
         } catch (error) {
           visionFaulted = true;
+          practicaLsec.cancelar();
           lastDetection = { landmarks: {}, encuadreValido: false };
           visionService.resetTracking();
           if (annotationService.getIsRecording()) btnRecordSena.click();
@@ -597,10 +622,11 @@ function animationLoop(timestamp: number) {
   }
 
   if (freshFrame) frameCount++;
+  if (!isSimulating) practicaLsec.registrar(userLandmarks, timestamp, freshFrame);
 
   // 2. Renderizado del espejo del usuario
   if (userLandmarks.pose || userLandmarks.rightHand || userLandmarks.leftHand) {
-    renderer.render(userLandmarks);
+    renderer.render(userLandmarks, practicaLsec.colores);
 
     // Registro continuo si la grabación del anotador está activa
     if (annotationService.getIsRecording() && freshFrame) {
@@ -642,6 +668,7 @@ function animationLoop(timestamp: number) {
 
 // ─── Control de cámara ───────────────────────────────────────────────────────
 btnToggleCamera.addEventListener('click', async () => {
+  practicaLsec.cancelar();
   if (activeUnit === null) return;
   if (cameraService.isRunning()) {
     cameraRequest++;
@@ -661,6 +688,7 @@ btnToggleCamera.addEventListener('click', async () => {
 
 // ─── Control de simulación sintética (Spike/Offline) ─────────────────────────
 btnToggleSynthetic.addEventListener('click', () => {
+  practicaLsec.cancelar();
   cameraRequest++;
   cameraService.stop();
   btnToggleCamera.disabled = false;

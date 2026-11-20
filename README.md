@@ -1,5 +1,15 @@
 # Viseña (VISPROY)
 
+**Para levantar el proyecto y probar una seña**, sigue la [guía de arranque y funcionamiento](docs/guia-arranque-y-funcionamiento.md). Incluye los comandos de PowerShell para este equipo y para una instalación nueva, la prueba con cámara y el recorrido de los datos entre el navegador, la API y PostgreSQL.
+
+## Backend LSEC para el frontend
+
+En el despliegue local, abre Saludos, inicia el nivel HOLA y pulsa **Probar seña** en el espejo. Las demostraciones habilitan el reconocimiento experimental de las 40 plantillas. El motor de práctica dirigida está preparado para referencias revisadas. [Estado por requisito y pruebas](docs/estado-integracion-frontend.md)
+
+El API integrado usa los puntos de MediaPipe que ya produce el frontend. Expone el catálogo CONADIS, las referencias revisadas para el avatar, el ranking experimental de glosas y la evaluación contra un ID como `ref-hola`. Consulte el [contrato de integración LSEC](docs/visena-lsec-contract.md) y el [cliente TypeScript](frontend-contract/example-lsec-client.ts).
+
+Para probar los clips de referencia, ejecute `prepare_lsec.py` según el contrato LSEC y habilite el paquete experimental con `VISENA_LSEC_DRAFTS`. El paquete revisado se carga desde `backend/data/lsec/catalogo.json`. Los puntajes requieren umbrales calibrados por referencia.
+
 ## Backend VISENA en tiempo real
 
 **Práctica ASL con cámara:** `/ws/v2/visena/recognize` usa OpenHands BERT/WLASL2000. La página local ofrece DRINK, HELLO, WATER, EAT, PLEASE, THANK YOU y SORRY, todas glosas del catálogo WLASL2000, con enlaces a demostraciones ASL. Para DRINK informa qué mano se acercó a la boca y señala si se usó la opuesta a la solicitada. El video instructivo no se compara ni se envía al backend. `execution_score` permanece `null` y `execution_score_status` indica `awaiting_validation`: la probabilidad de una clase y las observaciones geométricas no verifican toda la seña. Consulte el [contrato v2](docs/visena-asl-prototype-contract.md), [AsyncAPI v2](docs/asyncapi-asl.yaml), [tipos TypeScript v2](frontend-contract/visena-asl.types.ts) y [evaluación de modelos](docs/model-evaluation.md).
@@ -64,12 +74,14 @@ Conforme a la sección 8.1 del ERS:
 
 ```text
 visenia/
-├── app/                  # PWA (Vite + TypeScript + MediaPipe Pose/Hand/Face + Three.js/VRM)
-├── data/
-│   └── schemas/          # JSON Schemas maestros: referencia y ejecución (ERS 6.1, 6.2)
-├── deploy/               # Caddy (HTTPS local), FastAPI y PostgreSQL (Docker Compose ERS 3.4)
-├── docs/                 # Decisiones, fuentes LSEC y estado técnico
-├── server/               # API FastAPI: salud, disponibilidad de PostgreSQL y versión
+├── backend/              # FastAPI, extracción y evaluación LSEC
+├── docs/                 # Contratos del backend y evaluación de modelos
+├── frontend-contract/    # Tipos y ejemplos de consumo
+├── frontend/
+│   ├── app/              # PWA Vite, MediaPipe y Three.js/VRM
+│   ├── data/schemas/     # Contratos de referencia y ejecución
+│   ├── deploy/           # Caddy, FastAPI y PostgreSQL
+│   └── docs/             # ADR, informe técnico e inventario de fuentes LSEC
 └── .github/
     └── workflows/        # Pipelines de Integración Continua (CI)
 ```
@@ -80,7 +92,7 @@ visenia/
 
 Instala Bun en la versión indicada por `packageManager` en `package.json` y Node.js 20, que CI utiliza para ejecutar las pruebas y las herramientas del frontend.
 
-Desde la raíz:
+Desde `frontend/`:
 
 ```sh
 bun install --frozen-lockfile
@@ -94,25 +106,25 @@ bun run format:check
 
 ### Despliegue local con HTTPS (RNF-14)
 
-Compila primero el frontend con `bun run build`: Caddy sirve `app/dist` y deriva `/api/*`, `/docs*` y `/openapi.json` al backend. Crea `deploy/.env` (ignorado por Git) con `POSTGRES_PASSWORD=` seguido de una contraseña aleatoria propia, larga y segura para URL (letras, números, `_` y `-`). No hay contraseña por defecto. Para un volumen PostgreSQL existente, conserva su contraseña o cámbiala en la base antes de actualizar la configuración.
+Compila primero el frontend con `bun run build`. Caddy sirve `frontend/app/dist` y deriva el API de laboratorio, las rutas LSEC y OpenAPI al backend. Desde `frontend/`, crea `deploy/.env` (ignorado por Git) con `POSTGRES_PASSWORD=` seguido de una contraseña aleatoria propia, larga y segura para URL (letras, números, `_` y `-`). Para un volumen PostgreSQL existente, conserva su contraseña o cámbiala en la base antes de actualizar la configuración.
 
 ```sh
-docker compose -f deploy/docker-compose.yml config --quiet
-docker compose -f deploy/docker-compose.yml up --build -d
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml config --quiet
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml up --build -d
 ```
 
-Abre `https://localhost` y confía en la CA local de Caddy en el equipo de laboratorio. Solo Caddy publica puertos; PostgreSQL y FastAPI son internos. `/api/health` indica que el proceso responde; `/api/ready` ejecuta `SELECT 1` y devuelve 503 si la base no está disponible. La API admite CORS para los orígenes locales declarados en `server/main.py`; `CORS_ORIGINS` permite indicar una lista explícita separada por comas al ejecutar la API fuera de Compose.
+Abre `https://localhost` y confía en la CA local de Caddy en el equipo de laboratorio. Solo Caddy publica puertos. `/api/health` indica que el proceso responde. `/api/ready` ejecuta `SELECT 1` y devuelve 503 si la base está indisponible. `CORS_ORIGINS` permite indicar los orígenes de desarrollo separados por comas al ejecutar la API fuera de Compose.
 
-Pruebas del backend (Python 3.11 o superior):
+Pruebas desde `backend/` (Python 3.14):
 
 ```sh
-python -m pip install -r server/requirements.txt
-python -m unittest discover -s server -v
+python -m pip install -r requirements.txt
+python -m pytest -q
 ```
 
 ---
 
-## 5. Entrega Frontend-G0
+## 5. Entrega histórica Frontend-G0
 
 Estado al **10 de noviembre de 2026**, rama `Frontend-G0`, commit `3ba8621`:
 
@@ -129,11 +141,11 @@ Estado al **10 de noviembre de 2026**, rama `Frontend-G0`, commit `3ba8621`:
 
 ### Revisión de contratos 
 
-Los esquemas [referencia](data/schemas/referencia.schema.json) y [ejecución](data/schemas/ejecucion.schema.json) usan la versión `1.1.0`. Confirmar campos, lateralidad, unidades y límites temporales usando primero una referencia real por temática. El esquema de referencia exige ahora campos fonológicos adicionales sin cambio de versión: conciliar exportaciones anteriores antes de incorporar el lote. El validador local acepta fechas sin hora ni zona; esta limitación sigue pendiente y debe considerarse al contrastar con otro validador. `bun run validate:catalog` comprueba el catálogo de referencia, no muestras de ejecución ni la salida de un motor evaluador.
+Los esquemas [referencia](frontend/data/schemas/referencia.schema.json) y [ejecución](frontend/data/schemas/ejecucion.schema.json) usan la versión `1.1.0`. El API usa los campos obligatorios de los esquemas actuales y valida la fecha de anotación con hora y zona para publicar. `bun run validate:catalog` comprueba el catálogo estático de referencia del frontend.
 
-- [Informe técnico consolidado](docs/informes/InformeTecnico.md)
-- [Decisiones de arquitectura](docs/adr)
-- [Inventario de fuentes LSEC](docs/datos/lote-1-lsec-conadis-2026-10-30.md)
+- [Informe técnico consolidado](frontend/docs/InformeTecnico.md)
+- [Decisiones de arquitectura](frontend/docs)
+- [Inventario de fuentes LSEC](frontend/docs/lote-1-lsec-conadis-2026-10-30.md)
 
 ## 6. Hoja de Ruta de Sprints y Puertas de Control
 

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import psycopg2
 
-import main
+from app import lab_api as main
 
 
 class HealthTests(unittest.TestCase):
@@ -22,7 +22,7 @@ class HealthTests(unittest.TestCase):
 
     def test_readiness_with_unreachable_database_is_unavailable(self):
         with patch.dict(os.environ, {"DATABASE_URL": "postgresql://unreachable"}), patch(
-            "main.psycopg2.connect", side_effect=psycopg2.OperationalError("secret")
+            "app.lab_api.psycopg2.connect", side_effect=psycopg2.OperationalError("secret")
         ):
             response = main.readiness_check()
         self.assertEqual(response.status_code, 503)
@@ -34,7 +34,7 @@ class HealthTests(unittest.TestCase):
         cursor = connection.cursor.return_value.__enter__.return_value
         cursor.fetchone.return_value = (1,)
         with patch.dict(os.environ, {"DATABASE_URL": "postgresql://db"}), patch(
-            "main.psycopg2.connect", return_value=connection
+            "app.lab_api.psycopg2.connect", return_value=connection
         ) as connect:
             response = main.readiness_check()
         self.assertEqual(response.status_code, 200)
@@ -51,7 +51,7 @@ class HealthTests(unittest.TestCase):
             psycopg2.OperationalError("query failed")
         )
         with patch.dict(os.environ, {"DATABASE_URL": "postgresql://db"}), patch(
-            "main.psycopg2.connect", return_value=connection
+            "app.lab_api.psycopg2.connect", return_value=connection
         ):
             response = main.readiness_check()
         self.assertEqual(response.status_code, 503)
