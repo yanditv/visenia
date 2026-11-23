@@ -8,7 +8,7 @@
  * 4. Exportar el archivo JSON estricto validable contra referencia.schema.json v1.1.0
  */
 import { HolisticFrameLandmarks } from '../render/skeleton-renderer';
-import * as referenceSchema from '../../../data/schemas/referencia.schema.json';
+import * as referenceSchema from '../../../../contracts/schemas/referencia.schema.json';
 
 export interface FrameCapturaSchema {
   frame_idx: number;

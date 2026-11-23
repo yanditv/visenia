@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import tailwindcss from '@tailwindcss/vite';
 import { createRequire } from 'module';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -10,6 +11,7 @@ const kalidokitEsPath = require.resolve('kalidokit/dist/kalidokit.es.js');
 
 export default defineConfig({
   plugins: [
+    tailwindcss(),
     {
       name: 'visenia-offline',
       apply: 'build',
@@ -23,11 +25,13 @@ export default defineConfig({
         for (const file of files) hash.update(file).update(readFileSync(file));
         const paths = files.map((file) => '/' + file.slice(dist.length + 1).replaceAll('\\', '/'));
         const worker = resolve(dist, 'sw.js');
+        const source = readFileSync(worker, 'utf8');
+        hash.update(source);
         writeFileSync(
           worker,
           `self.__VISENIA_CACHE = "visenia-${hash.digest('hex').slice(0, 16)}";\n` +
             `self.__VISENIA_PRECACHE = ${JSON.stringify(paths)};\n` +
-            readFileSync(worker, 'utf8')
+            source
         );
       },
     },
@@ -36,6 +40,9 @@ export default defineConfig({
       transformIndexHtml: {
         order: 'pre',
         handler(html) {
+          const page = html.replace(/<!-- view:([a-z]+) -->/g, (_, view: string) =>
+            readFileSync(resolve(import.meta.dirname, 'views', `${view}.html`), 'utf8')
+          );
           const messages: Record<string, string> = interfaz;
           const entities: Record<string, string> = {
             '&': '&amp;',
@@ -44,11 +51,16 @@ export default defineConfig({
             '"': '&quot;',
             "'": '&#39;',
           };
-          return html.replace(/\{\{([a-z0-9_]+)\}\}/g, (_, key: string) => {
+          return page.replace(/\{\{([a-z0-9_]+)\}\}/g, (_, key: string) => {
             if (!Object.hasOwn(messages, key)) throw new Error(`Missing es-EC message: ${key}`);
             return messages[key].replace(/[&<>"']/g, (character) => entities[character]);
           });
         },
+      },
+      handleHotUpdate({ file, server }) {
+        if (file.endsWith('.html') && file.split(/[\\/]/).at(-2) === 'views') {
+          server.ws.send({ type: 'full-reload' });
+        }
       },
     },
   ],

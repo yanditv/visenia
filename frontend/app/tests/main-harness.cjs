@@ -181,14 +181,23 @@ exports.boot = (options = {}) => {
     }
   }
   const modules = {
-    './practica-lsec': load('src/practica-lsec.ts'),
-    '../ui/mapa': load('ui/mapa.ts'),
+    './progreso/trayectoria': {
+      instalarTrayectoria(document, window, actualizar) {
+        options.trayectoria?.(actualizar);
+      },
+    },
+    './practica/resultado': { VistaResultado: load('src/practica/resultado.ts').VistaResultado },
+    './progreso/historial': { instalarHistorial() {} },
+    './practica/practica-lsec': load('src/practica/practica-lsec.ts'),
+    './catalogo/tematicas': load('src/catalogo/tematicas.ts'),
+    './catalogo/mapa': load('src/catalogo/mapa.ts'),
     '../i18n/es-EC/mensajes': require('./load-ts.cjs')('i18n/es-EC/mensajes.ts'),
     './camera/camera-service': { CameraService: Camera },
     './vision/vision-service': { VisionService: Vision },
-    './avatar/vrm-loader-spike': { VrmAvatarViewer: Viewer },
+    './avatar/vrm-avatar-viewer': { VrmAvatarViewer: Viewer },
     './catalogo/catalogo-service': { CatalogoPlayerService: Catalog },
     './render/skeleton-renderer': { SkeletonRenderer: Renderer },
+    './anotador/annotation-panel': load('src/anotador/annotation-panel.ts'),
     './anotador/annotation-service': { AnnotationService: Annotation },
   };
   const source = fs.readFileSync(path.join(__dirname, '../src/main.ts'), 'utf8');

@@ -1,91 +1,87 @@
-# Integración LSEC con el frontend
+# API LSEC
 
-Para ejecutar el sistema completo y comprobar la primera toma con cámara, consulta la [guía de arranque y funcionamiento](guia-arranque-y-funcionamiento.md).
+La API utiliza el prefijo /api/v1/lsec, JSON y contratos de captura 1.1.0. FastAPI publica la especificación completa en /openapi.json y una interfaz en /docs. Los tipos y el cliente TypeScript están en contracts/typescript.
 
-El API de Viseña recibe una ejecución completa como puntos de MediaPipe y usa el catálogo LSEC para sugerir glosas o comparar la ejecución con una referencia elegida. Usa los mismos identificadores, fotogramas, unidades y segmentos de los esquemas 1.1.0 del frontend. El clasificador de ASL es un servicio de prototipo independiente.
+## Catálogo y cálculo
 
-- [Tipos TypeScript](../frontend-contract/visena-lsec.types.ts) y [cliente de ejemplo](../frontend-contract/example-lsec-client.ts)
-- [Esquema de referencia](../frontend/data/schemas/referencia.schema.json) y [esquema de ejecución](../frontend/data/schemas/ejecucion.schema.json)
-- [Inventario CONADIS del frontend](../frontend/docs/lote-1-lsec-conadis-2026-10-30.json)
+| Método | Ruta | Uso |
+| --- | --- | --- |
+| GET | /catalogo | Inventario, estado de referencia y calibración. |
+| GET | /referencias | Referencias publicadas para el reproductor. |
+| GET | /plantillas/{id} | Puntos, lateralidad, dimensiones, procedencia y calibración. |
+| POST | /segmentaciones | Delimitar un gesto en una toma completa. |
+| POST | /reconocimientos?segmentar=true | Calcular hasta tres coincidencias y similitud. |
+| POST | /evaluaciones?segmentar=true | Calcular distancias, similitud y evaluación calibrada del objetivo. |
 
-## Endpoints
-
-Usar el prefijo `/api/v1/lsec` en el mismo origen con Caddy. En desarrollo directo, usar `http://127.0.0.1:8000/api/v1/lsec`. La especificación OpenAPI se obtiene del backend en `/openapi.json` y se puede explorar en `/docs`.
-
-| Método | Ruta               | Respuesta                                                                                                                                        |
-| ------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| GET    | `/catalogo`        | Estado y procedencia de cada seña, incluidas las 40 fichas del inventario. Los estados son `pendiente_referencia`, `experimental` y `publicada`. |
-| GET    | `/referencias`     | Arreglo de referencias revisadas en el formato que consume el reproductor, con sus pistas para el avatar.                                        |
-| POST   | `/reconocimientos` | Hasta tres glosas candidatas ordenadas por menor distancia geométrica.                                                                           |
-| POST   | `/evaluaciones`    | Distancias por parámetro para el `id_referencia` solicitado, más el documento de ejecución si hay datos suficientes y calibración.               |
-
-Los POST reciben `application/json` y solo aceptan landmarks. La captura se compara en memoria y no se guarda en la base de datos ni en archivos. `/api/ready` comprueba PostgreSQL de forma independiente. Los endpoints LSEC pueden operar sin PostgreSQL.
+Las rutas de cálculo procesan en memoria. La aplicación utiliza /practicas para guardar el resultado como parte de la operación.
 
 ## Captura
 
-El espejo ofrece **Probar seña** al comenzar un nivel. En una demostración se compara la toma con el lote experimental por HTTPS. En una referencia publicada se evalúa el objetivo con el motor TypeScript y su plantilla. La última publicación y las plantillas revisadas ya consultadas se pueden reutilizar sin red. Los fotogramas de participantes permanecen fuera de esa caché.
+Una toma incluye schema_version con valor 1.1.0, ancho, alto y frames. Cada cuadro contiene frame_idx, timestamp_ms y pistas opcionales de pose (33 puntos), mano_derecha y mano_izquierda (21 puntos), pose_world y blendshapes_rostro. Las coordenadas son las que entrega MediaPipe antes del efecto de espejo.
 
-`GET /plantillas/{id_referencia}` entrega puntos, dimensiones, lateralidad, intervalo del video original cuando está disponible, estado de revisión, requisitos faciales y calibración. El cliente obtiene una plantilla mediante `clienteLsec().plantilla(id)`. `evaluarLocal(plantilla, intento)` usa esa plantilla en memoria y devuelve el contrato de evaluación. [Motor TypeScript](../frontend-contract/motor-lsec.ts)
+Los índices empiezan en cero y los tiempos crecen estrictamente. Se admiten de 4 a 300 cuadros en hasta 20 segundos y cuerpos de hasta 10 MiB. La segmentación usa extremos inclusivos. Con segmentar=true, envía la captura completa sin una segmentación previa. Para enviar un segmento explícito, usa segmentar=false.
 
-`POST /segmentaciones` recibe el intento completo sin segmento previo. Devuelve `detectado` con los índices inclusivos y la mano observada, o `datos_insuficientes`. Usa altura de la mano, hombros y continuidad del seguimiento. Los índices corresponden a la captura enviada. El espejo llama a `POST /reconocimientos?segmentar=true` para segmentar y comparar con una sola transmisión de landmarks.
+El campo mano_practica puede indicar izquierda o derecha. La alternancia se aplica únicamente a referencias configuradas para permitirla.
 
-En desarrollo con Vite, `/api` se deriva a `http://127.0.0.1:8000`. La variable `VISENA_API_ORIGIN` permite cambiar el destino. En Compose el proxy es Caddy.
+## Persistencia
 
-Construir cada `FrameCaptura` con `frameLsec` a partir de los landmarks de `VisionService.detect`. Usar los nombres existentes del anotador si ya se trabaja con sus fotogramas.
+Estas rutas requieren X-Participant-Key con 64 caracteres hexadecimales minúsculos. El navegador genera la clave mediante un generador criptográfico y la guarda localmente.
 
-- Enviar `schema_version: "1.1.0"`, `ancho` y `alto` del video original, más entre 4 y 300 `frames` dentro de 20 segundos. El límite del JSON es 10 MiB.
-- Usar índices consecutivos desde 0 y tiempos estrictamente crecientes en milisegundos. `segmentacion` es opcional y sus extremos son inclusivos. Al omitirla se usa toda la captura. Para obtener resultados comparables, enviar el gesto aislado o indicar su intervalo.
-- Enviar coordenadas tal como las entrega MediaPipe antes de aplicar el espejo visual. Las manos son izquierda y derecha anatómicas. Para una seña de una mano se compara el lado de la referencia. Para una variante unilateral que admite alternancia, indicar mano_practica. El motor solo refleja las pistas manuales cuando la plantilla declara permite_alternancia_manual. Las referencias bimanuales conservan ambos lados anatómicos.
-- Omitir pistas no detectadas. Se necesitan los 33 puntos de pose para normalizar con los hombros y los 21 puntos de cada mano requerida. El backend no requiere que ambas manos estén visibles en señas de una mano.
-- Cuando una referencia exige expresión facial, enviar `blendshapes_rostro`. El subconjunto de `rostro` no sustituye esos coeficientes. `pose_world` y `vrm_pose_override` se conservan en los documentos para el avatar.
+| Método | Ruta | Uso |
+| --- | --- | --- |
+| POST | /practicas | Calcular y guardar un intento idempotente. |
+| GET | /practicas?limite=20&offset=0 | Historial paginado. Admite id_referencia. Límite máximo 100. |
+| GET | /practicas/{id_intento} | Detalle del propio intento. |
+| GET | /trayectoria | XP, intentos calificados de hoy, meta y racha. |
+| POST | /feedback/{id_intento} | Recibe un cuerpo JSON vacío y devuelve consejo local o de Groq para un intento propio. |
+| GET | /progreso | Intentos, cantidad calificada, promedio, mejor nota y última fecha por seña. |
+| GET | /exportaciones?formato=json | Todos los resultados de esa identidad. También admite csv. |
 
-Para `/evaluaciones`, añadir `id_referencia`, por ejemplo `ref-hola`. Usar opcionalmente `modo`; el valor por defecto es `practica_libre`.
+El POST recibe la captura y los siguientes campos:
 
-## Resultados y estados
+~~~json
+{
+  "schema_version": "1.1.0",
+  "id_intento": "7f34921f-ff45-4d65-9086-17004e9a5603",
+  "id_referencia": "ref-hola",
+  "segmentar": true,
+  "ancho": 640,
+  "alto": 480,
+  "frames": []
+}
+~~~
 
-- `reconocimientos.estado: "experimental"` indica que el ranking contiene candidatas con cobertura suficiente. La distancia promedia cuatro parámetros manuales y una distancia menor indica mayor similitud. El ranking compara únicamente con el catálogo cargado y puede sugerir una glosa al recibir un movimiento ajeno al catálogo.
-- `evaluaciones.estado: "evaluado"` incluye `ejecucion.resultado` y respeta el esquema de ejecución 1.1.0. El puntaje se calcula con los umbrales específicos de esa referencia. La respuesta indica las zonas anatómicas correspondientes a las desviaciones. Un prosoponema `no_aplica` aparece como neutro en el documento de ejecución, con el mensaje «Sin requisito facial» y sin afectar el puntaje.
-- `evaluaciones.estado: "sin_calibracion"` incluye las distancias disponibles y `ejecucion: null`. Mostrar las observaciones con su condición experimental. Las tolerancias de la anotación describen el gesto y se calibran por separado de las distancias DTW.
-- `datos_insuficientes` permite solicitar otra captura. Una pista requiere cuatro cuadros válidos como mínimo, cobertura del 70 % y huecos de hasta 350 ms. La falta de datos nunca produce un veredicto negativo.
-- `sin_referencias` indica que no hay plantillas cargadas para reconocimiento. HTTP 404 con `detail.codigo: "referencia_no_disponible"` indica que la referencia elegida todavía no tiene plantilla. HTTP 503 con `detail.codigo: "catalogo_no_disponible"` indica que falló la carga de un paquete configurado.
-- HTTP 413 indica que se superó el tamaño permitido, HTTP 415 indica que el contenido no es el JSON de landmarks y HTTP 422 identifica los campos inválidos.
+En el ejemplo, reemplaza frames por al menos cuatro cuadros válidos. Omite id_referencia para reconocimiento libre. El resultado incluye id_intento, timestamp_utc, tipo, id_referencia, glosa, captura con métricas agregadas y resultado con la evaluación o el reconocimiento.
 
-`latencia_ms` mide preparación y comparación en el backend. La métrica de extremo a extremo del frontend debe medirse desde que termina la captura hasta que aparece el resultado.
+Reintenta con el mismo ID y contenido cuando se pierda una respuesta. El servidor devuelve el registro confirmado y conserva una sola fila incluso con solicitudes concurrentes. Otro contenido con el mismo ID devuelve 409. Cada identidad solo consulta sus propios resultados. Una captura insuficiente también queda registrada con nota nula.
 
-## Preparar el lote de laboratorio
+El documento persistido omite las coordenadas. El arreglo ejecucion.frames_ejecucion queda vacío en esta ruta. Las rutas de cálculo conservan el contrato completo para consumidores que necesiten los cuadros en memoria.
 
-Usar los clips locales identificados por `video_id` o `id_propuesto` del inventario. El extractor utiliza en CPU los mismos modelos Pose, Hand y Face del frontend. Escribe un paquete experimental con metadatos, intervalo original, pistas y segmento. Las referencias que no superan la cobertura se informan por separado.
+GET /feedback/estado indica si hay una clave configurada en `groq_disponible`. La validación de la clave ocurre al solicitar el consejo. La generación conserva la calificación. El resultado incluye `fuente`, `estado` y `consejo`. El estado `cuota_agotada` acompaña el consejo local cuando Groq responde con HTTP 429.
 
-Desde `backend/` con Python 3.14 y las dependencias de `requirements.txt` instaladas:
+## Resultados
 
-```powershell
-.\.venv\Scripts\python.exe prepare_lsec.py data/references/conadis-lote1/clips data/lsec/borrador-conadis-lote1.json --version conadis-lote1-piloto-1
-$env:VISENA_LSEC_DRAFTS = (Resolve-Path data/lsec/borrador-conadis-lote1.json).Path
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
+El objeto similitud incluye ID de referencia, glosa, puntaje de 0 a 100, notas por parámetro, consejo y zonas a resaltar. La fórmula y sus escalas están descritas en [Proyecto](PROYECTO.md).
 
-Con `yt-dlp` disponible, añadir `--descargar` para obtener los clips públicos faltantes desde los enlaces del inventario.
+Una evaluación tiene estado evaluado, sin_calibracion o datos_insuficientes. El estado sin_calibracion puede incluir una nota geométrica. El campo ejecucion.resultado aparece al existir calibración educativa. Una captura insuficiente devuelve similitud y ejecución nulas.
 
-Para corregir un tramo automático, pasar `--intervalos ruta.json` con un diccionario por ID. Cada valor contiene `inicio` y `fin` inclusivos en índices de los cuadros muestreados por el extractor y `mano_dominante` con valor `izquierda`, `derecha` o `ambas`.
+El reconocimiento tiene estado experimental, datos_insuficientes o sin_referencias. Las candidatas se ordenan por distancia normalizada ascendente. El modo libre necesita medir también movimientos ajenos al catálogo para evaluar el rechazo de señas desconocidas.
 
-El catálogo experimental se habilita explícitamente con `VISENA_LSEC_DRAFTS`. En Compose, el directorio local `backend/data/lsec` se monta en `/workspace/backend/data/lsec`; usar la ruta correspondiente dentro del contenedor. Los clips y los datos generados pertenecen al paquete de laboratorio local y no se incluyen en Git.
+## Referencias publicadas
 
-## Publicar referencias y puntuaciones
+El archivo contiene version y una lista referencias. Cada elemento tiene ancho, alto, fuente_url, referencia, revision y, opcionalmente, calibracion.
 
-Guardar el lote revisado en `backend/data/lsec/catalogo.json` o indicar otro archivo con `VISENA_LSEC_CATALOG` al ejecutar Uvicorn. El contenedor carga el archivo del directorio montado. El objeto principal contiene `version` y un arreglo `referencias`. Cada entrada contiene:
+El objeto referencia cumple contracts/schemas/referencia.schema.json. La revisión identifica especialista, fecha con zona horaria y procedencia. La calibración contiene puntaje_minimo y umbrales con límites verde y rojo por parámetro aplicable. Los valores son distancias del motor y requieren calibración con muestras independientes.
 
-| Campo           | Contenido                                                                                                                               |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `ancho`, `alto` | Dimensiones originales del material usado para la extracción.                                                                           |
-| `fuente_url`    | URL de procedencia de esa referencia.                                                                                                   |
-| `referencia`    | Objeto completo que cumple el esquema `ReferenciaSena` 1.1.0, con anotación fonológica, metadatos y segmento revisados.                 |
-| `revision`      | Objeto con `especialista`, `fecha` con zona horaria y `procedencia` que identifique la muestra y variante aceptadas.                    |
-| `calibracion`   | Opcional. Incluye `puntaje_minimo` entre 0 y 100 y `umbrales`, un mapa por parámetro aplicable con cotas de distancia `verde` y `rojo`. |
+## Errores y disponibilidad
 
-El backend comprueba que el archivo cumple el esquema, que índices y tiempos concuerdan y que las pistas requeridas tienen cobertura. Una referencia revisada puede aparecer en el reproductor aunque su evaluación calibrada siga pendiente. Si un ID existe en ambos paquetes, se usa la versión revisada. Actualizar el archivo completo de forma atómica y cambiar su versión cuando cambien sus referencias o umbrales.
+| Código | Situación |
+| --- | --- |
+| 404 | Referencia o intento propio ausente. |
+| 409 | ID de intento reutilizado con otro contenido o propietario. |
+| 413 | Cuerpo superior a 10 MiB. |
+| 415 | Tipo de contenido distinto de JSON para una captura. |
+| 422 | Captura, parámetros o clave de identidad inválidos. |
+| 503 | Catálogo o almacenamiento configurado indisponible. |
 
-## Verificación del piloto
-
-Se extrajeron 40 referencias, diez por temática, con segmentación automática. Se reprodujeron sus landmarks a través de Caddy HTTPS y FastAPI. Las 40 referencias quedaron en primer lugar al reinyectar sus propios landmarks y las 40 evaluaciones devolvieron `sin_calibracion`. La mediana local fue de 5,6 ms en el motor de evaluación dirigida y 203,9 ms por solicitud HTTPS de reconocimiento.
-
-Se reextrajeron HOLA, FAMILIA, ROJO y UNO después de cambiar el encuadre del clip original. Las cuatro glosas quedaron en primer lugar. Quedan pendientes la revisión lingüística de los segmentos y variantes, una prueba con cámara y participantes independientes, y la calibración de las puntuaciones.
+GET /api/health, /api/ready y /api/version permiten comprobar servicio, persistencia y versión. Los detalles internos y credenciales quedan fuera de los errores de API.

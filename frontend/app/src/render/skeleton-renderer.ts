@@ -6,7 +6,7 @@
  * - Contorno facial (cejas, ojos, labios) para expresión prosoponémica
  */
 
-import type { Zona } from '../../../../frontend-contract/visena-lsec.types';
+import type { Zona } from '../../../../contracts/typescript/visena-lsec.types';
 
 export interface LandmarkPoint {
   x: number; // Normalizado 0.0 a 1.0 (o metros en pose_world)

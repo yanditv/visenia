@@ -225,3 +225,17 @@ test('el mapa actualiza los niveles cuando el catálogo llega tarde', async () =
   assert.equal(app.element('level-title').textContent, 'HOLA');
   assert.deepEqual([app.counts.avatar, app.counts.vision, app.counts.camera], [0, 0, 0]);
 });
+
+test('el progreso tardío conserva la seña que el usuario eligió en el mapa', async () => {
+  let actualizarProgreso;
+  const app = boot({ trayectoria: (actualizar) => (actualizarProgreso = actualizar) });
+  await flush();
+  app.theme(12).click();
+  app.element('level-path').children[1].children[0].click();
+  actualizarProgreso(new Map([['ref-gracias', 88]]));
+  assert.equal(app.element('level-title').textContent, 'POR FAVOR');
+  assert.equal(app.element('map-view').dataset.selection, 'true');
+  assert.match(app.element('level-path').children[0].children[2].textContent, /88/);
+  await app.element('btn-start-level').click();
+  assert.equal(app.element('select-catalogo-sena').value, 'ref-por-favor');
+});

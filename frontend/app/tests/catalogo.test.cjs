@@ -252,3 +252,28 @@ test('el catálogo prioriza publicaciones y recupera la última copia válida si
   assert.deepEqual(await service.loadCatalog(), references);
   assert.deepEqual(await stored.get('/api/v1/lsec/referencias').json(), []);
 });
+
+test('los niveles experimentales cargan la guía elegida sin sustituir una selección posterior', async (t) => {
+  const niveles = ['hola', 'azul'].map((glosa, i) => ({
+    id: 'ref-' + glosa, glosa: glosa.toUpperCase(), unidad_tematica: i + 1, estado: 'experimental',
+  }));
+  let soltar;
+  t.mock.method(global, 'fetch', async (url) => {
+    if (url.endsWith('/catalogo')) return Response.json({ referencias: niveles });
+    if (url.endsWith('/referencias')) return Response.json([]);
+    if (url.endsWith('/referencias-v1.json')) return Response.json(references);
+    if (url.endsWith('ref-hola')) await new Promise((resolve) => { soltar = resolve; });
+    return Response.json({ captura: { frames: references[0].frames, ancho: 640, alto: 480 } });
+  });
+  const service = new CatalogoPlayerService();
+  await service.loadCatalog();
+  assert.equal(service.getCatalog(1).length, 1);
+  assert.equal(service.selectSena('ref-hola').estado, 'experimental');
+  const primera = service.cargarGuia();
+  service.selectSena('ref-azul');
+  await service.cargarGuia();
+  soltar();
+  await primera;
+  assert.equal(service.getSelectedSena().id, 'ref-azul');
+  assert.equal(service.getSelectedSena().frames.length, references[0].frames.length);
+});

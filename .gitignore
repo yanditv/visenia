@@ -26,7 +26,7 @@ __pycache__/
 env/
 venv/
 .venv/
-.venv-openhands/
+.venv-*/
 build/
 develop-eggs/
 dist/
@@ -74,3 +74,8 @@ models/
 
 # Data
 **/data
+
+# Browser vision models and the avatar form part of the runnable LSEC application.
+!frontend/app/public/models/
+!frontend/app/public/models/*.task
+!frontend/app/public/models/visenia.vrm

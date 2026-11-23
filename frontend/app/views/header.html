@@ -1,0 +1,70 @@
+<header class="site-header">
+  <div class="site-inner mx-auto flex w-full flex-wrap items-center justify-between gap-x-4">
+    <button type="button" id="nav-home" class="brand-link">
+      <span class="brand-mark" aria-hidden="true">V</span>
+      <span>{{visena}}</span>
+    </button>
+    <nav class="main-nav flex items-center gap-1" aria-label="Navegación principal">
+      <button type="button" id="nav-themes" class="nav-link">Temáticas</button>
+      <button type="button" id="nav-history" class="nav-link">Historial</button>
+    </nav>
+    <div class="header-actions flex items-center gap-1">
+      <details class="advanced-tools" name="header-menu" data-motion-disclosure>
+        <summary id="tools-trigger">
+          <span data-lucide="sliders-horizontal"></span>
+          {{herramientas}}
+          <span data-lucide="chevron-down" class="disclosure-chevron"></span>
+        </summary>
+        <div class="tool-fields" data-motion-content>
+          <nav class="nav-tabs" aria-label="{{herramientas_de_practica}}">
+            <button id="tab-practica" class="tab-btn active">{{espacio_de_practica}}</button>
+            <button
+              id="tab-anotador"
+              class="tab-btn"
+              aria-controls="anotador-drawer"
+              aria-expanded="false"
+            >
+              {{anotar_referencias}}
+            </button>
+          </nav>
+          <div class="hud-stats">
+            <span id="fps-display">{{fps}}</span><span id="preferred-hand-display"></span>
+          </div>
+        </div>
+      </details>
+
+      <details class="settings" name="header-menu" data-motion-disclosure>
+        <summary id="settings-trigger">
+          <span data-lucide="settings-2"></span>
+          {{ajustes}}
+          <span data-lucide="chevron-down" class="disclosure-chevron"></span>
+        </summary>
+        <div class="settings-fields" data-motion-content>
+          <label class="setting-field" for="text-size">
+            <span>{{tamano_de_texto}}</span>
+            <select id="text-size">
+              <option value="18">{{normal}}</option>
+              <option value="21">{{grande}}</option>
+              <option value="24">{{muy_grande}}</option>
+            </select>
+          </label>
+          <label class="contrast-toggle" for="high-contrast">
+            <span>{{alto_contraste}}</span>
+            <input id="high-contrast" type="checkbox" />
+          </label>
+          <label class="setting-field" for="preferred-hand">
+            <span>{{mano_dominante}}</span>
+            <select id="preferred-hand">
+              <option value="derecha">{{derecha}}</option>
+              <option value="izquierda">{{izquierda}}</option>
+              <option value="ambas">{{ambas}}</option>
+            </select>
+          </label>
+          <p class="motion-preference-note">
+            La preferencia de movimiento reducido del sistema está activa.
+          </p>
+        </div>
+      </details>
+    </div>
+  </div>
+</header>

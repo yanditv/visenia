@@ -6,7 +6,9 @@
  * - Control de reproducción interactivo: Play / Pausa / Scrubbing / Velocidad 1x y 0.5x (RF-08)
  * - Emisión de landmarks por fotograma para el solver Kalidokit
  */
-import { Quaternion } from 'three';
+import { Quaternion } from 'three/src/math/Quaternion.js';
+import { clienteLsec } from '../../../../contracts/typescript/cliente-lsec';
+import type { CatalogoLsec } from '../../../../contracts/typescript/visena-lsec.types';
 import {
   ReferenciaSenaData,
   FrameCapturaSchema,
@@ -15,9 +17,20 @@ import {
 } from '../anotador/annotation-service';
 import { HolisticFrameLandmarks, LandmarkPoint } from '../render/skeleton-renderer';
 
+export type Nivel = ReferenciaSenaData | CatalogoLsec['referencias'][number];
+type Guia = Pick<
+  ReferenciaSenaData,
+  'id' | 'glosa' | 'frames' | 'segmentacion' | 'mano_dominante'
+> & {
+  metadatos_grabacion: { fps: number };
+  parametros_fonologicos?: ReferenciaSenaData['parametros_fonologicos'];
+};
+
 export class CatalogoPlayerService {
-  private catalogo: ReferenciaSenaData[] = [];
-  private selectedSena: ReferenciaSenaData | null = null;
+  private catalogo: Nivel[] = [];
+  private nivel: Nivel | null = null;
+  private selectedSena: Guia | null = null;
+  private readonly api = clienteLsec();
   private isPlaying: boolean = false;
   private playbackSpeed: number = 1.0; // 1.0 = normal, 0.5 = lenta (RF-08)
   private currentFrameIndex: number = 0;
@@ -48,16 +61,29 @@ export class CatalogoPlayerService {
     return rows;
   }
 
-  public async loadCatalog(url?: string): Promise<ReferenciaSenaData[]> {
+  public async loadCatalog(url?: string): Promise<Nivel[]> {
     try {
-      let data: unknown = url ? [] : await this.publishedCatalog();
+      const [published, index] = url
+        ? [[], undefined]
+        : await Promise.all([
+            this.publishedCatalog(),
+            this.api.catalogo(AbortSignal.timeout(10000)).catch(() => undefined),
+          ]);
+      const drafts = index?.referencias?.filter((r) => r.estado === 'experimental') ?? [];
+      let data: unknown = published;
       if (Array.isArray(data) && !data.length) {
-        const res = await fetch(url ?? '/data/referencias-v1.json');
-        if (!res.ok) throw new Error(`Error HTTP ${res.status} al cargar catálogo de señas.`);
-        data = await res.json();
+        try {
+          const res = await fetch(url ?? '/data/referencias-v1.json');
+          if (!res.ok) throw new Error(`Error HTTP ${res.status} al cargar catálogo de señas.`);
+          data = await res.json();
+        } catch (error) {
+          if (!drafts.length) throw error;
+        }
       }
       validateCatalog(data);
-      this.catalogo = data;
+      const ids = new Set(drafts.map((r) => String(r.id)));
+      this.catalogo = [...data.filter((r) => !ids.has(r.id)), ...drafts];
+      this.nivel = null;
       this.selectedSena = null;
       this.isPlaying = false;
       this.isLoaded = true;
@@ -70,6 +96,7 @@ export class CatalogoPlayerService {
       return this.catalogo;
     } catch (err) {
       this.catalogo = [];
+      this.nivel = null;
       this.selectedSena = null;
       this.isLoaded = false;
       this.isPlaying = false;
@@ -78,15 +105,16 @@ export class CatalogoPlayerService {
     }
   }
 
-  public getCatalog(unit?: number): ReferenciaSenaData[] {
+  public getCatalog(unit?: number): Nivel[] {
     return unit === undefined
       ? this.catalogo
       : this.catalogo.filter((s) => s.unidad_tematica === unit);
   }
 
-  public selectUnit(unit: number): ReferenciaSenaData[] {
+  public selectUnit(unit: number): Nivel[] {
     this.pause();
     this.selectedSena = null;
+    this.nivel = null;
     this.currentFrameIndex = 0;
     this.playbackTimeMs = 0;
     const references = this.getCatalog(unit);
@@ -98,17 +126,51 @@ export class CatalogoPlayerService {
     return this.isLoaded;
   }
 
-  public isDemo(sena: ReferenciaSenaData): boolean {
-    return !!this.mapFrameToLandmarks(sena.frames[this.getSegmentBounds(sena)[0]]).isDemo;
+  public isDemo(sena: Nivel): boolean {
+    return (
+      'frames' in sena &&
+      !!this.mapFrameToLandmarks(sena.frames[this.getSegmentBounds(sena)[0]]).isDemo
+    );
   }
 
-  public getSelectedSena(): ReferenciaSenaData | null {
+  public getSelectedSena(): Guia | null {
     return this.selectedSena;
   }
 
-  public selectSena(id: string): ReferenciaSenaData | null {
+  public getNivel() {
+    return this.nivel;
+  }
+
+  public async cargarGuia() {
+    const nivel = this.nivel;
+    if (!nivel || 'frames' in nivel || this.selectedSena) return;
+    const plantilla = await this.api.plantilla(nivel.id, AbortSignal.timeout(10000));
+    if (this.nivel !== nivel) return;
+    const { frames, segmentacion, ancho, alto } = plantilla.captura;
+    const last = frames.length - 1;
+    this.selectedSena = {
+      id: nivel.id,
+      glosa: nivel.glosa,
+      mano_dominante: plantilla.mano_dominante,
+      frames: frames.map((f) => ({ ...f, image_aspect: f.image_aspect ?? ancho / alto })),
+      segmentacion: segmentacion ?? { frame_inicio_sena: 0, frame_fin_sena: last },
+      metadatos_grabacion: {
+        fps: (last * 1000) / (frames[last].timestamp_ms - frames[0].timestamp_ms),
+      },
+    };
+    this.seekFrame(this.selectedSena.segmentacion.frame_inicio_sena);
+    this.lastTickTime = performance.now();
+  }
+
+  public selectSena(id: string): Nivel | null {
     const sena = this.catalogo.find((s) => s.id === id);
     if (sena) {
+      this.nivel = sena;
+      if (!('frames' in sena)) {
+        this.isPlaying = false;
+        this.selectedSena = null;
+        return sena;
+      }
       this.selectedSena = sena;
       this.currentFrameIndex = this.getSegmentBounds(sena)[0];
       this.playbackTimeMs = sena.frames[this.currentFrameIndex].timestamp_ms;
@@ -255,7 +317,7 @@ export class CatalogoPlayerService {
   /**
    * Mapea un FrameCapturaSchema a HolisticFrameLandmarks para el solver y renderer.
    */
-  private getSegmentBounds(sena: ReferenciaSenaData): [number, number] {
+  private getSegmentBounds(sena: Guia): [number, number] {
     const last = sena.frames.length - 1;
     const start = Math.max(0, Math.min(last, Math.trunc(sena.segmentacion.frame_inicio_sena) || 0));
     const end = Math.max(start, Math.min(last, Math.trunc(sena.segmentacion.frame_fin_sena) || 0));

@@ -1,9 +1,8 @@
-from typing import Annotated, Literal
 from datetime import datetime
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
-
 
 ReferenceId = Annotated[str, StringConstraints(pattern=r"^ref-[a-z0-9-]+$", max_length=80)]
 Number = Annotated[float, Field(allow_inf_nan=False)]
@@ -11,12 +10,18 @@ Coordinate = Annotated[Number, Field(ge=-10, le=10)]
 Coefficient = Annotated[Number, Field(ge=0, le=1)]
 Side = Literal["izquierda", "derecha", "ambas"]
 Parameter = Literal[
-    "queirema_configuracion", "kinema_orientacion", "toponema_ubicacion",
-    "kinesema_movimiento", "prosoponema_no_manual",
+    "queirema_configuracion",
+    "kinema_orientacion",
+    "toponema_ubicacion",
+    "kinesema_movimiento",
+    "prosoponema_no_manual",
 ]
 PARAMETERS = (
-    "queirema_configuracion", "kinema_orientacion", "toponema_ubicacion",
-    "kinesema_movimiento", "prosoponema_no_manual",
+    "queirema_configuracion",
+    "kinema_orientacion",
+    "toponema_ubicacion",
+    "kinesema_movimiento",
+    "prosoponema_no_manual",
 )
 
 
@@ -41,14 +46,17 @@ class Frame(ContractModel):
     mano_derecha: list[Point] | None = Field(default=None, max_length=21)
     rostro: list[Point] | None = Field(default=None, max_length=478)
     blendshapes_rostro: dict[str, Coefficient] | None = Field(default=None, max_length=64)
-    vrm_pose_override: dict[str, Annotated[list[Number], Field(min_length=4, max_length=4)]] | None = Field(
-        default=None, max_length=64
-    )
+    vrm_pose_override: (
+        dict[str, Annotated[list[Number], Field(min_length=4, max_length=4)]] | None
+    ) = Field(default=None, max_length=64)
 
     @model_validator(mode="after")
     def check_tracks(self):
         for name, count in (
-            ("pose", 33), ("pose_world", 33), ("mano_izquierda", 21), ("mano_derecha", 21),
+            ("pose", 33),
+            ("pose_world", 33),
+            ("mano_izquierda", 21),
+            ("mano_derecha", 21),
         ):
             points = getattr(self, name)
             if points and len(points) != count:
@@ -80,16 +88,27 @@ class Capture(ContractModel):
         if self.segmentacion:
             segment = self.segmentacion
             start, end = segment.frame_inicio_sena, segment.frame_fin_sena
-            preparation = start if segment.frame_inicio_preparacion is None else segment.frame_inicio_preparacion
+            preparation = (
+                start
+                if segment.frame_inicio_preparacion is None
+                else segment.frame_inicio_preparacion
+            )
             return_frame = end if segment.frame_retorno is None else segment.frame_retorno
-            if not 0 <= preparation <= start <= end <= return_frame < len(self.frames) or end - start < 3:
-                raise ValueError("La segmentación debe contener al menos cuatro cuadros consecutivos válidos.")
+            if (
+                not 0 <= preparation <= start <= end <= return_frame < len(self.frames)
+                or end - start < 3
+            ):
+                raise ValueError(
+                    "La segmentación debe contener al menos cuatro cuadros consecutivos válidos."
+                )
         return self
 
     def gesture(self):
         if self.segmentacion is None:
             return self.frames
-        return self.frames[self.segmentacion.frame_inicio_sena:self.segmentacion.frame_fin_sena + 1]
+        return self.frames[
+            self.segmentacion.frame_inicio_sena : self.segmentacion.frame_fin_sena + 1
+        ]
 
 
 class Attempt(Capture):
@@ -153,10 +172,22 @@ class Candidate(ContractModel):
     distancia: float
 
 
+class SimilarityGrade(ContractModel):
+    """Geometric practice feedback for one reference, independent of calibration."""
+
+    id_referencia: ReferenceId
+    glosa: str
+    puntaje: Number = Field(ge=0, le=100)
+    por_parametro: dict[Parameter, Number]
+    mensaje_feedback: str
+    zonas_resaltar: list[str]
+
+
 class Recognition(ContractModel):
     estado: Literal["experimental", "datos_insuficientes", "sin_referencias"]
     version_catalogo: str | None
     candidatas: list[Candidate]
+    similitud: SimilarityGrade | None = None
 
 
 class ResultParameter(ContractModel):
@@ -187,9 +218,9 @@ class Timing(ContractModel):
 
 class Execution(ContractModel):
     schema_version: Literal["1.1.0"] = "1.1.0"
-    id_ejecucion: UUID
+    id_ejecucion: UUID = Field(strict=False)
     id_referencia: ReferenceId
-    timestamp_utc: datetime
+    timestamp_utc: datetime = Field(strict=False)
     modo: Literal["practica_libre", "investigacion_pin", "kiosco"]
     diagnostico_tecnico: Diagnostics
     senales_segmentacion: Timing
@@ -203,6 +234,7 @@ class Evaluation(ContractModel):
     id_referencia: ReferenceId
     parametros: dict[Parameter, Distance]
     ejecucion: Execution | None
+    similitud: SimilarityGrade | None = None
     latencia_ms: float
 
 

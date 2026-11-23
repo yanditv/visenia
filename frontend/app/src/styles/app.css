@@ -1,0 +1,21 @@
+@import 'tailwindcss' source(none);
+@import './tokens.css';
+@import './components.css';
+@import './inicio.css';
+@import './tematicas.css';
+@import './practica.css';
+@import './anotador.css';
+@import './historial.css';
+
+@source '../../index.html';
+@source '../../views';
+@source '../';
+
+@theme inline {
+  --font-sans: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif;
+  --font-display: Lexend, 'Segoe UI', system-ui, sans-serif;
+  --color-ink: var(--vs-ink);
+  --color-muted: var(--vs-muted);
+  --color-brand: var(--vs-primary);
+  --color-surface: var(--vs-surface);
+}

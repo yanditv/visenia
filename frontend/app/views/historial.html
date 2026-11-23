@@ -1,0 +1,47 @@
+<details id="historial" class="page-shell history-panel surface-card" data-motion-disclosure>
+  <summary class="history-summary">
+    <span class="history-summary-icon"><span data-lucide="history"></span></span>
+    <span>Mi historial y progreso</span>
+    <span data-lucide="chevron-down" class="disclosure-chevron"></span>
+  </summary>
+  <div class="history-body" data-motion-content>
+    <p class="history-intro">
+      Consulta las prácticas de este navegador y descarga una copia de tus resultados.
+    </p>
+    <div class="history-toolbar">
+      <button id="historial-actualizar" type="button" class="btn btn-secondary">
+        <span data-lucide="refresh-cw"></span> Actualizar
+      </button>
+      <div class="history-exports" role="group" aria-label="Exportar historial">
+        <button id="historial-csv" type="button" class="btn btn-primary">
+          <span data-lucide="download"></span> Exportar CSV
+        </button>
+        <button id="historial-json" type="button" class="btn btn-secondary">Exportar JSON</button>
+      </div>
+    </div>
+    <p id="historial-estado" class="history-status" role="status"></p>
+    <ol id="historial-lista" role="list" aria-label="Intentos recientes" data-motion-list></ol>
+    <div class="history-pagination" id="historial-paginacion" hidden>
+      <button id="historial-anterior" type="button" class="btn btn-secondary" disabled>
+        <span data-lucide="arrow-left"></span> Anterior
+      </button>
+      <span id="historial-pagina"></span>
+      <button id="historial-siguiente" type="button" class="btn btn-secondary" disabled>
+        Siguiente <span data-lucide="arrow-right"></span>
+      </button>
+    </div>
+    <details class="history-progress" data-motion-disclosure>
+      <summary>
+        <span data-lucide="chart-no-axes-column-increasing"></span>
+        Progreso por seña
+        <span data-lucide="chevron-down" class="disclosure-chevron"></span>
+      </summary>
+      <div data-motion-content>
+        <p id="historial-progreso-vacio" class="history-intro" hidden>
+          El progreso aparecerá cuando guardes una práctica.
+        </p>
+        <ul id="historial-progreso" role="list" data-motion-list></ul>
+      </div>
+    </details>
+  </div>
+</details>

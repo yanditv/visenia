@@ -9,14 +9,19 @@
  *  - Anotador fonológico: captura, segmentación y exportación de referencias JSON schema v1.1.0
  */
 import { mapa, mensajes, themes } from '../i18n/es-EC/mensajes';
-import { renderLevelMap } from '../ui/mapa';
+import { renderLevelMap } from './catalogo/mapa';
+import { renderThemes } from './catalogo/tematicas';
 import { CameraService } from './camera/camera-service';
 import { SkeletonRenderer, HolisticFrameLandmarks } from './render/skeleton-renderer';
-import { VisionService } from './vision/vision-service';
-import { VrmAvatarViewer, VRM_MODEL_URL } from './avatar/vrm-loader-spike';
+import type { VisionService } from './vision/vision-service';
+import type { VrmAvatarViewer } from './avatar/vrm-avatar-viewer';
 import { AnnotationService } from './anotador/annotation-service';
-import { PracticaLsec } from './practica-lsec';
-import type { IdReferencia } from '../../../frontend-contract/visena-lsec.types';
+import { createAnnotationPanel } from './anotador/annotation-panel';
+import { instalarHistorial } from './progreso/historial';
+import { instalarTrayectoria } from './progreso/trayectoria';
+import { VistaResultado } from './practica/resultado';
+import { PracticaLsec } from './practica/practica-lsec';
+import type { IdReferencia } from '../../../contracts/typescript/visena-lsec.types';
 import { CatalogoPlayerService } from './catalogo/catalogo-service';
 
 // ─── Referencias del DOM: Espejo y HUD ──────────────────────────────────────
@@ -59,61 +64,45 @@ const btnModeGuia = document.getElementById('btn-mode-guia') as HTMLButtonElemen
 const btnModeEspejo = document.getElementById('btn-mode-espejo') as HTMLButtonElement;
 let avatarDisplayMode: 'guia' | 'espejo' = 'guia';
 
-// ─── Referencias del DOM: Tabs y Drawer Anotador ────────────────────────────
-const tabPractica = document.getElementById('tab-practica') as HTMLButtonElement;
-const tabAnotador = document.getElementById('tab-anotador') as HTMLButtonElement;
-const anotadorDrawer = document.getElementById('anotador-drawer') as HTMLElement;
-anotadorDrawer.hidden = true;
-const btnCerrarAnotador = document.getElementById('btn-cerrar-anotador') as HTMLButtonElement;
-const btnRecordSena = document.getElementById('btn-record-sena') as HTMLButtonElement;
-const recordStatus = document.getElementById('record-status') as HTMLSpanElement;
-const recordCounter = document.getElementById('record-counter') as HTMLSpanElement;
-const sliderFrameInicio = document.getElementById('slider-frame-inicio') as HTMLInputElement;
-const sliderFrameFin = document.getElementById('slider-frame-fin') as HTMLInputElement;
-const lblFrameInicio = document.getElementById('lbl-frame-inicio') as HTMLElement;
-const lblFrameFin = document.getElementById('lbl-frame-fin') as HTMLElement;
-
-const inputGlosa = document.getElementById('input-glosa') as HTMLInputElement;
-const selectUnidad = document.getElementById('select-unidad') as HTMLInputElement;
-const selectDificultad = document.getElementById('select-dificultad') as HTMLSelectElement;
-const selectManoDom = document.getElementById('select-mano-dom') as HTMLSelectElement;
-const selectToponema = document.getElementById('select-toponema') as HTMLSelectElement;
-const selectKinesema = document.getElementById('select-kinesema') as HTMLSelectElement;
-const inputQueirema = document.getElementById('input-queirema') as HTMLInputElement;
-const inputQueiremaDesc = document.getElementById('input-queirema-desc') as HTMLInputElement;
-const inputPalmaX = document.getElementById('input-palma-x') as HTMLInputElement;
-const inputPalmaY = document.getElementById('input-palma-y') as HTMLInputElement;
-const inputPalmaZ = document.getElementById('input-palma-z') as HTMLInputElement;
-const inputRepeticiones = document.getElementById('input-repeticiones') as HTMLInputElement;
-const checkProsoponema = document.getElementById('check-prosoponema') as HTMLInputElement;
-const selectProsoponemaTarget = document.getElementById(
-  'select-prosoponema-target'
-) as HTMLSelectElement;
-const inputProsoponemaCoef = document.getElementById('input-prosoponema-coef') as HTMLInputElement;
-const btnExportJson = document.getElementById('btn-export-json') as HTMLButtonElement;
-const exportMsg = document.getElementById('export-msg') as HTMLSpanElement;
-
 // ─── Servicios ───────────────────────────────────────────────────────────────
+instalarHistorial(document, window);
 const cameraService = new CameraService(video);
 const renderer = new SkeletonRenderer(canvas);
-const visionService = new VisionService();
 const referenceRenderer = new SkeletonRenderer(
   document.getElementById('reference-skeleton-canvas') as HTMLCanvasElement
 );
 referenceRenderer.resize(640, 480);
 const referenceStatus = document.getElementById('reference-status') as HTMLSpanElement;
-const annotationService = new AnnotationService();
+const annotation = createAnnotationPanel(document, new AnnotationService(), {
+  ensurePractice: () => {
+    if (activeUnit === null) void enterTheme(mapUnit ?? 1);
+  },
+  canRecord: () =>
+    isSimulating ||
+    (cameraService.isRunning() && visionService?.getReadyStatus() === true && !visionFaulted),
+});
 const catalogoService = new CatalogoPlayerService();
 const probarSena = document.getElementById('probar-sena') as HTMLButtonElement;
-const practicaLsec = new PracticaLsec(probarSena, document.getElementById('resultado-lsec')!);
+const practicaLsec = new PracticaLsec(
+  probarSena,
+  document.getElementById('resultado-lsec')!,
+  new VistaResultado(document)
+);
+const reconocimientoLibre = document.getElementById('reconocimiento-libre') as HTMLInputElement;
+reconocimientoLibre.addEventListener('change', () => practicaLsec.cancelar());
 probarSena.addEventListener('click', () => {
-  const ref = catalogoService.getSelectedSena();
+  const ref = catalogoService.getNivel();
   const mano = (document.getElementById('preferred-hand') as HTMLSelectElement)?.value;
   return practicaLsec.activar(
-    cameraService.isRunning() && !isSimulating && visionService.getReadyStatus() && !visionFaulted,
+    cameraService.isRunning() &&
+      !isSimulating &&
+      visionService?.getReadyStatus() === true &&
+      !visionFaulted,
     video.videoWidth,
     video.videoHeight,
-    ref && !catalogoService.isDemo(ref) ? (ref.id as IdReferencia) : undefined,
+    ref && !reconocimientoLibre.checked && !catalogoService.isDemo(ref)
+      ? (ref.id as IdReferencia)
+      : undefined,
     mano === 'izquierda' || mano === 'derecha' ? mano : undefined
   );
 });
@@ -126,6 +115,7 @@ window.addEventListener(
 );
 
 let avatarViewer: VrmAvatarViewer | null = null;
+let visionService: VisionService | null = null;
 let avatarLoad: Promise<unknown> | null = null;
 let visionLoad: Promise<void> | null = null;
 let visionFaulted = false;
@@ -156,41 +146,18 @@ function resourceStatus(name: string, message: string, state: 'loading' | 'ready
   );
 }
 
-function renderThemes(): void {
-  themesGrid.replaceChildren();
-  themes.forEach(([name, description, icon], index) => {
-    const card = document.createElement('button');
-    card.type = 'button';
-    card.className = 'theme-card';
-    card.dataset.unit = String(index + 1);
-    const refs = catalogoService.getCatalog(index + 1);
-    const demo = refs.length > 0 && refs.every((s) => catalogoService.isDemo(s));
-    card.dataset.available = String(refs.length > 0);
-    for (const [className, text] of [
-      ['theme-icon', icon],
-      ['theme-number', mensajes.unidad(String(index + 1).padStart(2, '0'))],
-      ['theme-name', name],
-      ['theme-description', description],
-      [
-        'theme-count',
-        refs.length
-          ? `${refs.length} ${demo ? (refs.length === 1 ? mensajes.demostracion : mensajes.demostraciones) : refs.length === 1 ? mensajes.sena : mensajes.senas}`
-          : mensajes.referenciaPendiente,
-      ],
-      ['theme-action', refs.length ? mapa.verMapa : mapa.proximo],
-    ]) {
-      const span = document.createElement('span');
-      span.className = className;
-      span.textContent = text;
-      if (className === 'theme-icon') span.setAttribute('aria-hidden', 'true');
-      card.appendChild(span);
-    }
-    card.addEventListener('click', () => showMap(index + 1));
-    themesGrid.appendChild(card);
-  });
+let mejoresNotas: ReadonlyMap<string, number> = new Map();
+
+function refreshThemes(): void {
+  renderThemes(
+    document,
+    (unit) => catalogoService.getCatalog(unit),
+    mejoresNotas,
+    (unit, referenceId) => showMap(unit, true, referenceId)
+  );
 }
 
-function refreshSelectedCatalog(): void {
+function refreshSelectedCatalog(referenceId?: string): void {
   if (activeUnit === null) return;
   const senas = catalogoService.selectUnit(activeUnit);
   btnPlayerPlay.textContent = mensajes.reproducir;
@@ -215,7 +182,9 @@ function refreshSelectedCatalog(): void {
     opt.textContent = `${s.glosa}${catalogoService.isDemo(s) ? mensajes.etiquetaDemostracion : ''}`;
     selectCatalogoSena.appendChild(opt);
   });
-  selectCatalogoSena.value = senas[0]?.id ?? '';
+  if (referenceId && senas.some((nivel) => nivel.id === referenceId))
+    catalogoService.selectSena(referenceId);
+  selectCatalogoSena.value = catalogoService.getNivel()?.id ?? '';
   const failed = !catalogoService.getIsLoaded();
   catalogNotice.textContent = failed
     ? mensajes.errorCatalogo
@@ -225,20 +194,20 @@ function refreshSelectedCatalog(): void {
         ? mensajes.catalogoDemo
         : mensajes.referenciasDisponibles(senas.length);
   retryCatalog.hidden = !failed;
-  setAvatarDisplayMode(avatarDisplayMode);
-  updateFonologiaDisplay();
+  void actualizarGuia();
 }
 
 async function loadCatalog(): Promise<void> {
   catalogLoading = true;
+  const selected = catalogoService.getNivel()?.id;
   await catalogoService.loadCatalog();
   catalogLoading = false;
-  renderThemes();
-  refreshSelectedCatalog();
+  refreshThemes();
+  refreshSelectedCatalog(selected);
   if (mapUnit !== null && activeUnit === null) showMap(mapUnit, false);
 }
 
-function showMap(unit: number, focus = true): void {
+function showMap(unit: number, focus = true, referenceId?: string): void {
   mapUnit = unit;
   homeView.hidden = true;
   practiceView.hidden = true;
@@ -249,17 +218,32 @@ function showMap(unit: number, focus = true): void {
     catalogoService.getCatalog(unit),
     (reference) => catalogoService.isDemo(reference),
     (referenceId) => enterTheme(unit, referenceId),
-    catalogoService.getSelectedSena()?.id
+    referenceId ?? (focus ? catalogoService.getSelectedSena()?.id : undefined),
+    mejoresNotas,
+    !focus
   );
   mapRetry.hidden = catalogLoading || catalogoService.getIsLoaded();
   if (focus) mapTitle.focus();
 }
 
-document.getElementById('btn-map-home')!.addEventListener('click', () => {
+function showHome() {
   mapUnit = null;
   mapView.hidden = true;
   homeView.hidden = false;
+}
+
+function openThemes() {
+  if (activeUnit !== null) backToThemes.click();
+  showHome();
   themesGrid.focus();
+}
+
+document.getElementById('btn-map-home')!.addEventListener('click', openThemes);
+document.getElementById('nav-themes')!.addEventListener('click', openThemes);
+document.getElementById('nav-home')!.addEventListener('click', () => {
+  if (activeUnit !== null) backToThemes.click();
+  showHome();
+  document.getElementById('home-title')!.focus();
 });
 mapRetry.addEventListener('click', async () => {
   mapRetry.setAttribute('disabled', '');
@@ -269,7 +253,12 @@ mapRetry.addEventListener('click', async () => {
     mapRetry.removeAttribute('disabled');
   }
 });
-renderThemes();
+instalarTrayectoria(document, window, (notas) => {
+  mejoresNotas = notas;
+  refreshThemes();
+  if (mapUnit !== null && activeUnit === null) showMap(mapUnit, false);
+});
+refreshThemes();
 void loadCatalog();
 retryCatalog.addEventListener('click', async () => {
   retryCatalog.disabled = true;
@@ -283,6 +272,8 @@ retryCatalog.addEventListener('click', async () => {
 async function prepareAvatar(id: number): Promise<void> {
   resourceStatus('avatar', mensajes.avatarCargando, 'loading');
   try {
+    const { VrmAvatarViewer, VRM_MODEL_URL } = await import('./avatar/vrm-avatar-viewer');
+    if (!currentSession(id)) return;
     avatarViewer ??= new VrmAvatarViewer({ container: avatarContainer });
     if (!avatarViewer.getVrm()) {
       avatarLoad ??= avatarViewer.loadModel(VRM_MODEL_URL).finally(() => {
@@ -305,6 +296,11 @@ async function prepareAvatar(id: number): Promise<void> {
 async function prepareVision(id: number): Promise<void> {
   resourceStatus('vision', mensajes.visionCargando, 'loading');
   try {
+    if (!visionService) {
+      const { VisionService } = await import('./vision/vision-service');
+      if (!currentSession(id)) return;
+      visionService ??= new VisionService();
+    }
     if (!visionService.getReadyStatus()) {
       visionLoad ??= visionService.init().finally(() => {
         visionLoad = null;
@@ -313,7 +309,7 @@ async function prepareVision(id: number): Promise<void> {
     }
     if (currentSession(id)) {
       visionFaulted = false;
-      visionService.resetTracking();
+      visionService?.resetTracking();
       lastVideoTime = -1;
       resourceStatus('vision', mensajes.visionLista, 'ready');
     }
@@ -338,7 +334,7 @@ async function startCamera(id: number): Promise<void> {
     if (cameraLoad) await cameraLoad.catch(() => {});
     if (!currentSession(id) || request !== cameraRequest) return;
     if (!cameraService.isRunning()) {
-      visionService.resetTracking();
+      visionService?.resetTracking();
       lastVideoTime = -1;
       lastDetection = { landmarks: {}, encuadreValido: false };
       cameraLoad = cameraService.start().finally(() => {
@@ -387,21 +383,18 @@ async function enterTheme(unit: number, referenceId?: string): Promise<void> {
   statusDisplay.textContent = mensajes.preparandoPractica;
   statusDisplay.className = 'status-indicator camera-status';
   practiceTitle.focus();
-  selectUnidad.value = String(unit);
+  annotation.setUnit(unit);
   lastTimestamp = performance.now();
-  refreshSelectedCatalog();
-  if (referenceId) {
-    catalogoService.selectSena(referenceId);
-    selectCatalogoSena.value = referenceId;
-    updateFonologiaDisplay();
-  }
+  refreshSelectedCatalog(referenceId);
   animationFrame = requestAnimationFrame(animationLoop);
   await prepareResources(id);
 }
 
 backToThemes.addEventListener('click', () => {
+  const unit = activeUnit ?? mapUnit ?? 1;
+  const referenceId = catalogoService.getNivel()?.id;
   practicaLsec.cancelar();
-  if (annotationService.getIsRecording()) btnRecordSena.click();
+  annotation.finish();
   activeUnit = null;
   sessionId++;
   cameraRequest++;
@@ -421,13 +414,9 @@ backToThemes.addEventListener('click', () => {
   btnToggleSynthetic.textContent = mensajes.activarSimulacion;
   renderer.clear();
   encuadreBox?.classList.remove('valido');
-  anotadorDrawer.classList.add('oculto');
-  anotadorDrawer.hidden = true;
-  tabAnotador.setAttribute('aria-expanded', 'false');
-  tabPractica.classList.add('active');
-  tabAnotador.classList.remove('active');
+  annotation.close();
   practiceView.hidden = true;
-  showMap(mapUnit ?? 1);
+  showMap(unit, true, referenceId);
 });
 retryResources.addEventListener('click', () => prepareResources(sessionId));
 
@@ -435,16 +424,15 @@ function updateFonologiaDisplay(): void {
   const sena = catalogoService.getSelectedSena();
   if (sena) {
     const params = sena.parametros_fonologicos;
-    const toponema = params.toponema_ubicacion.zona_corporal.replace('_', ' ');
-    const kinesema = params.kinesema_movimiento.tipo_movimiento;
-    const queirema = params.queirema_configuracion.codigo_forma.replaceAll('_', ' ');
-    fonologiaInfo.textContent = mensajes.fonologia(
-      toponema,
-      kinesema,
-      queirema,
-      params.kinema_orientacion.vector_palma.join(', '),
-      params.prosoponema_no_manual.requerido
-    );
+    fonologiaInfo.textContent = params
+      ? mensajes.fonologia(
+          params.toponema_ubicacion.zona_corporal.replace('_', ' '),
+          params.kinesema_movimiento.tipo_movimiento,
+          params.queirema_configuracion.codigo_forma.replaceAll('_', ' '),
+          params.kinema_orientacion.vector_palma.join(', '),
+          params.prosoponema_no_manual.requerido
+        )
+      : 'Guía experimental. Anotación fonológica pendiente.';
     sliderPlayerProgress.min = sena.segmentacion.frame_inicio_sena.toString();
     sliderPlayerProgress.max = sena.segmentacion.frame_fin_sena.toString();
     sliderPlayerProgress.value = catalogoService.getCurrentFrameIndex().toString();
@@ -452,11 +440,37 @@ function updateFonologiaDisplay(): void {
   }
 }
 
+async function actualizarGuia() {
+  const nivel = catalogoService.getNivel();
+  const sesion = sessionId;
+  reconocimientoLibre.disabled = !nivel || catalogoService.isDemo(nivel);
+  reconocimientoLibre.checked = reconocimientoLibre.disabled;
+  setAvatarDisplayMode(avatarDisplayMode);
+  if (nivel && 'estado' in nivel) {
+    referenceRenderer.clear();
+    playerTimeDisplay.textContent = '0/0';
+    referenceStatus.textContent = 'Cargando guía…';
+    fonologiaInfo.textContent = '';
+    try {
+      await catalogoService.cargarGuia();
+    } catch {
+      if (currentSession(sesion) && catalogoService.getNivel() === nivel) {
+        referenceStatus.textContent = 'No se pudo cargar la guía. Vuelve a intentar.';
+        retryCatalog.hidden = false;
+      }
+      return;
+    }
+    if (!currentSession(sesion) || catalogoService.getNivel() !== nivel) return;
+    setAvatarDisplayMode(avatarDisplayMode);
+  }
+  updateFonologiaDisplay();
+}
+
 selectCatalogoSena.addEventListener('change', () => {
   practicaLsec.cancelar();
   avatarViewer?.resetPose();
   catalogoService.selectSena(selectCatalogoSena.value);
-  updateFonologiaDisplay();
+  void actualizarGuia();
   if (catalogoService.getIsPlaying()) {
     catalogoService.play();
   }
@@ -579,10 +593,17 @@ function animationLoop(timestamp: number) {
     userLandmarks = renderer.generateSyntheticPose(timestamp);
     encuadreBox?.classList.add('valido');
   } else if (cameraService.isRunning()) {
-    if (visionService.getReadyStatus() && !visionFaulted) {
+    if (visionService?.getReadyStatus() && !visionFaulted) {
       if (video.currentTime !== lastVideoTime) {
         try {
-          lastDetection = visionService.detect(video, timestamp);
+          const manos = reconocimientoLibre.checked
+            ? 'cualquiera'
+            : catalogoService.getSelectedSena()?.mano_dominante;
+          lastDetection = visionService.detect(
+            video,
+            timestamp,
+            annotation.isRecording() ? 'ambas' : manos
+          );
           freshFrame = true;
           lastVideoTime = video.currentTime;
           lastDetectionAt = timestamp;
@@ -591,7 +612,7 @@ function animationLoop(timestamp: number) {
           practicaLsec.cancelar();
           lastDetection = { landmarks: {}, encuadreValido: false };
           visionService.resetTracking();
-          if (annotationService.getIsRecording()) btnRecordSena.click();
+          annotation.finish();
           resourceStatus(
             'vision',
             mensajes.visionError(
@@ -628,14 +649,7 @@ function animationLoop(timestamp: number) {
   if (userLandmarks.pose || userLandmarks.rightHand || userLandmarks.leftHand) {
     renderer.render(userLandmarks, practicaLsec.colores);
 
-    // Registro continuo si la grabación del anotador está activa
-    if (annotationService.getIsRecording() && freshFrame) {
-      annotationService.recordFrame(userLandmarks);
-      const frames = annotationService.getRecordedFrames();
-      const lastFrame = frames[frames.length - 1];
-      const durSec = (lastFrame.timestamp_ms / 1000).toFixed(1);
-      recordCounter.textContent = mensajes.cuadros(frames.length, durSec);
-    }
+    if (freshFrame) annotation.record(userLandmarks);
   } else {
     renderer.clear();
   }
@@ -671,6 +685,7 @@ btnToggleCamera.addEventListener('click', async () => {
   practicaLsec.cancelar();
   if (activeUnit === null) return;
   if (cameraService.isRunning()) {
+    annotation.finish();
     cameraRequest++;
     cameraService.stop();
     lastVideoTime = -1;
@@ -689,6 +704,7 @@ btnToggleCamera.addEventListener('click', async () => {
 // ─── Control de simulación sintética (Spike/Offline) ─────────────────────────
 btnToggleSynthetic.addEventListener('click', () => {
   practicaLsec.cancelar();
+  annotation.finish();
   cameraRequest++;
   cameraService.stop();
   btnToggleCamera.disabled = false;
@@ -707,183 +723,10 @@ btnToggleSynthetic.addEventListener('click', () => {
   }
 });
 
-// ─── Lógica de Navegación Tabs & Drawer Anotador ──────────────────────────────
-tabPractica.addEventListener('click', () => {
-  if (activeUnit === null) void enterTheme(mapUnit ?? 1);
-  tabPractica.classList.add('active');
-  tabAnotador.classList.remove('active');
-  anotadorDrawer.classList.add('oculto');
-  anotadorDrawer.hidden = true;
-  tabAnotador.setAttribute('aria-expanded', 'false');
-});
-
-tabAnotador.addEventListener('click', () => {
-  if (activeUnit === null) void enterTheme(mapUnit ?? 1);
-  tabAnotador.classList.add('active');
-  tabPractica.classList.remove('active');
-  anotadorDrawer.classList.remove('oculto');
-  anotadorDrawer.hidden = false;
-  tabAnotador.setAttribute('aria-expanded', 'true');
-  btnCerrarAnotador.focus();
-});
-
-btnCerrarAnotador.addEventListener('click', () => {
-  tabPractica.click();
-  tabAnotador.focus();
-});
-
-// ─── Controles de Grabación de Seña ──────────────────────────────────────────
-btnRecordSena.addEventListener('click', () => {
-  if (!annotationService.getIsRecording()) {
-    if (!cameraService.isRunning() && !isSimulating) {
-      alert(mensajes.activarAntesDeGrabar);
-      return;
-    }
-    annotationService.startRecording();
-    btnRecordSena.textContent = mensajes.detenerGrabacion;
-    btnRecordSena.classList.add('recording');
-    recordStatus.textContent = mensajes.grabando;
-    recordStatus.style.color = '#ef4444';
-    exportMsg.textContent = '';
-  } else {
-    const stats = annotationService.stopRecording();
-    btnRecordSena.textContent = mensajes.nuevaToma;
-    btnRecordSena.classList.remove('recording');
-    recordStatus.textContent = mensajes.tomaFinalizada(stats.totalFrames);
-    recordStatus.style.color = '#22c55e';
-
-    const maxIdx = Math.max(0, stats.totalFrames - 1);
-    sliderFrameInicio.max = maxIdx.toString();
-    sliderFrameFin.max = maxIdx.toString();
-    sliderFrameInicio.value = '0';
-    sliderFrameFin.value = maxIdx.toString();
-    lblFrameInicio.textContent = '0';
-    lblFrameFin.textContent = maxIdx.toString();
-  }
-});
-
-sliderFrameInicio.addEventListener('input', () => {
-  lblFrameInicio.textContent = sliderFrameInicio.value;
-  if (parseInt(sliderFrameInicio.value) > parseInt(sliderFrameFin.value)) {
-    sliderFrameFin.value = sliderFrameInicio.value;
-    lblFrameFin.textContent = sliderFrameInicio.value;
-  }
-});
-
-sliderFrameFin.addEventListener('input', () => {
-  lblFrameFin.textContent = sliderFrameFin.value;
-  if (parseInt(sliderFrameFin.value) < parseInt(sliderFrameInicio.value)) {
-    sliderFrameInicio.value = sliderFrameFin.value;
-    lblFrameInicio.textContent = sliderFrameFin.value;
-  }
-});
-
-// ─── Exportación de JSON Schema v1.1.0 ───────────────────────────────────────
-checkProsoponema.addEventListener('change', () => {
-  for (const field of [selectProsoponemaTarget, inputProsoponemaCoef]) {
-    field.disabled = !checkProsoponema.checked;
-    field.required = checkProsoponema.checked;
-  }
-});
-
-btnExportJson.addEventListener('click', () => {
-  const recorded = annotationService.getRecordedFrames();
-  if (recorded.length === 0) {
-    exportMsg.textContent = mensajes.tomaObligatoria;
-    exportMsg.className = 'export-msg error';
-    return;
-  }
-
-  const glosa = inputGlosa.value.trim();
-  if (!glosa) {
-    exportMsg.textContent = mensajes.glosaObligatoria;
-    exportMsg.className = 'export-msg error';
-    return;
-  }
-
-  try {
-    exportMsg.textContent = '';
-    const fields = [
-      selectUnidad,
-      inputQueirema,
-      inputQueiremaDesc,
-      selectToponema,
-      selectKinesema,
-      inputPalmaX,
-      inputPalmaY,
-      inputPalmaZ,
-      inputRepeticiones,
-      sliderFrameInicio,
-      sliderFrameFin,
-      ...(checkProsoponema.checked ? [selectProsoponemaTarget, inputProsoponemaCoef] : []),
-    ];
-    for (const field of fields) {
-      if (!field.reportValidity()) return;
-      if (!field.value.trim()) {
-        field.focus();
-        throw new Error('Completa los parámetros fonológicos antes de exportar.');
-      }
-    }
-    const kinemaPalma: [number, number, number] = [
-      Number(inputPalmaX.value),
-      Number(inputPalmaY.value),
-      Number(inputPalmaZ.value),
-    ];
-    const repeticiones = Number(inputRepeticiones.value);
-    const unidad = Number(selectUnidad.value);
-    const inicio = Number(sliderFrameInicio.value);
-    const fin = Number(sliderFrameFin.value);
-    if (!kinemaPalma.every(Number.isFinite) || kinemaPalma.every((value) => value === 0))
-      throw new Error('La orientación de la palma debe ser un vector numérico distinto de cero.');
-    if (!Number.isInteger(repeticiones) || repeticiones < 0)
-      throw new Error('Las repeticiones deben ser un número entero mayor o igual a cero.');
-    if (
-      !Number.isInteger(unidad) ||
-      unidad < 1 ||
-      unidad > 12 ||
-      !Number.isInteger(inicio) ||
-      !Number.isInteger(fin)
-    )
-      throw new Error('Revisa la unidad temática y los límites de la seña.');
-    let prosoponemaBlendshapes: Record<string, number> | undefined;
-    if (checkProsoponema.checked) {
-      const coefficient = Number(inputProsoponemaCoef.value);
-      if (!Number.isFinite(coefficient) || coefficient < 0 || coefficient > 1)
-        throw new Error('El coeficiente facial debe estar entre 0 y 1.');
-      prosoponemaBlendshapes = { [selectProsoponemaTarget.value]: coefficient };
-    }
-    const doc = annotationService.buildReferenceDocument({
-      glosa,
-      unidadTematica: unidad,
-      dificultad: selectDificultad.value as 'facil' | 'intermedio' | 'avanzado',
-      manoDominante: selectManoDom.value as 'derecha' | 'izquierda' | 'ambas',
-      anotador: 'Especialista LSE Viseña',
-      frameInicioSena: inicio,
-      frameFinSena: fin,
-      queiremaForma: inputQueirema.value.trim(),
-      queiremaDesc: inputQueiremaDesc.value.trim(),
-      kinemaPalma,
-      toponemaZona: selectToponema.value as any,
-      kinesemaTipo: selectKinesema.value as any,
-      kinesemaRepeticiones: repeticiones,
-      prosoponemaRequerido: checkProsoponema.checked,
-      prosoponemaBlendshapes,
-    });
-
-    annotationService.downloadJson(doc);
-    exportMsg.textContent = mensajes.referenciaExportada(doc.id);
-    exportMsg.className = 'export-msg success';
-  } catch (err: unknown) {
-    const error = err as Error;
-    exportMsg.textContent = mensajes.error(error.message);
-    exportMsg.className = 'export-msg error';
-  }
-});
-
 // ─── Registro de Service Worker para PWA (offline) ───────────────────────────
 if ('serviceWorker' in navigator && window.isSecureContext) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch((err) => {
       console.warn('[PWA] Service Worker no registrado (modo dev local):', err);
     });
   });

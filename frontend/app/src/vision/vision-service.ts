@@ -146,7 +146,8 @@ export class VisionService {
 
   public detect(
     video: HTMLVideoElement,
-    timestamp: number
+    timestamp: number,
+    manos: 'derecha' | 'izquierda' | 'ambas' | 'cualquiera' = 'ambas'
   ): {
     landmarks: HolisticFrameLandmarks;
     encuadreValido: boolean;
@@ -265,11 +266,18 @@ export class VisionService {
 
     const inside = (p: LandmarkPoint | undefined) =>
       p && (p.visibility ?? 1) > 0.5 && p.x > 0.05 && p.x < 0.95 && p.y > 0.05 && p.y < 0.95;
+    const izquierda = !!inside(result.leftHand?.[0]);
+    const derecha = !!inside(result.rightHand?.[0]);
+    const manosVisibles = {
+      izquierda,
+      derecha,
+      ambas: izquierda && derecha,
+      cualquiera: izquierda || derecha,
+    };
     encuadreValido =
       encuadreValido &&
       !!result.face?.length &&
-      !!inside(result.leftHand?.[0]) &&
-      !!inside(result.rightHand?.[0]) &&
+      manosVisibles[manos] &&
       !!inside(result.pose?.[11]) &&
       !!inside(result.pose?.[12]);
     if (!encuadreValido) this.framingSince = null;

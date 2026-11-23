@@ -1,0 +1,70 @@
+<main id="home-view" class="page-shell home-view" data-motion-view>
+  <section class="home-hero" aria-labelledby="home-title">
+    <div class="hero-content relative z-10 flex min-w-0 flex-col items-start justify-center">
+      <p class="hero-kicker" data-motion-item>Lengua de Señas Ecuatoriana</p>
+      <h1 id="home-title" tabindex="-1" data-motion-item>
+        Aprende una<br />seña a la vez<span>.</span>
+      </h1>
+      <p class="hero-description" data-motion-item>
+        Observa la seña, practica frente a tu cámara y descubre qué mejorar en cada intento.
+      </p>
+      <a
+        class="btn btn-primary hero-link"
+        id="continuar-practica"
+        href="#tematicas-title"
+        data-motion-item
+        >Empezar a practicar</a
+      >
+    </div>
+    <div class="hero-visual" aria-hidden="true" data-motion-item>
+      <img src="/media/visenia-hero.webp" alt="" width="1275" height="850" fetchpriority="high" />
+    </div>
+  </section>
+  <section class="journey mt-7" id="progreso" aria-labelledby="journey-title" data-motion-item>
+    <div class="section-heading flex flex-wrap items-center justify-between gap-x-3">
+      <h2 id="journey-title">Mi progreso</h2>
+      <button class="text-action" type="button" id="abrir-historial">Ver historial</button>
+    </div>
+    <div
+      class="journey-grid grid grid-cols-2 gap-3 md:grid-cols-[1.35fr_1fr_1fr]"
+      id="journey-grid"
+    >
+      <article class="journey-card daily-card col-span-2 md:col-span-1">
+        <div class="flex flex-wrap items-baseline justify-between gap-1">
+          <span class="metric-label">Meta diaria</span><strong id="meta-valor">—</strong>
+        </div>
+        <progress
+          id="meta-progreso"
+          value="0"
+          max="3"
+          aria-label="Intentos calificados hoy"
+        ></progress>
+        <span class="metric-note" id="meta-nota">Completa 3 intentos con nota.</span>
+      </article>
+      <article class="journey-card">
+        <span class="metric-label">Racha</span><strong id="racha-valor">—</strong
+        ><span class="metric-note">Días seguidos de práctica</span>
+      </article>
+      <article class="journey-card">
+        <span class="metric-label">Experiencia</span><strong id="xp-valor">—</strong
+        ><span class="metric-note">10 XP por intento con nota</span>
+      </article>
+    </div>
+    <p id="journey-state" class="metric-note" role="status"></p>
+  </section>
+  <section aria-labelledby="tematicas-title" class="learning-units mt-8">
+    <div class="section-heading flex flex-wrap items-baseline justify-between gap-x-3">
+      <h2 id="tematicas-title">Explora las temáticas</h2>
+      <span class="themes-total" id="tematicas-disponibles"></span>
+    </div>
+    <div
+      id="tematicas-grid"
+      class="themes-grid grid grid-cols-1 gap-3 min-[540px]:grid-cols-2 lg:grid-cols-4"
+      tabindex="-1"
+      aria-label="Temáticas de aprendizaje"
+    ></div>
+    <button type="button" id="mostrar-tematicas" class="text-action" aria-pressed="false">
+      Ver temáticas futuras
+    </button>
+  </section>
+</main>

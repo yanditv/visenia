@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const THREE = require('three');
 const load = require('./load-ts.cjs');
-const { VrmAvatarViewer } = load('src/avatar/vrm-loader-spike.ts');
+const { VrmAvatarViewer } = load('src/avatar/vrm-avatar-viewer.ts');
 const { VisionService } = load('src/vision/vision-service.ts');
 
 function rig() {
@@ -237,6 +237,16 @@ test('encuadre no es válido sin rostro y ambas manos durante un segundo', () =>
   const v = detector([]);
   const r = v.detect({ readyState: 2 }, 2000);
   assert.equal(r.encuadreValido, false);
+});
+test('una mano derecha basta para el encuadre de UNO y ambas siguen siendo necesarias en una seña bimanual', () => {
+  const v = detector([hand(0.2)]);
+  v.faceLandmarker = {
+    detectForVideo: () => ({ faceLandmarks: [Array.from({ length: 478 }, () => point(0.5, 0.4))] }),
+  };
+  const video = { readyState: 2, videoWidth: 640, videoHeight: 480 };
+  for (let t = 0; t <= 1000; t += 100) v.detect(video, t, 'derecha');
+  assert.equal(v.detect(video, 1100, 'derecha').encuadreValido, true);
+  assert.equal(v.detect(video, 1200, 'ambas').encuadreValido, false);
 });
 test('el encuadre requiere un segundo continuo y reinicia al interrumpir el vídeo', () => {
   const v = detector([hand(0.2), hand(0.8)]);

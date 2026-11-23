@@ -1,0 +1,29 @@
+<main id="map-view" class="page-shell map-view" hidden data-motion-view>
+  <div class="map-toolbar" data-motion-item>
+    <button id="btn-map-home" class="btn btn-secondary">{{mapa_volver}}</button>
+  </div>
+  <div class="map-layout">
+    <section class="unit-map surface-card min-w-0" aria-labelledby="map-title">
+      <header class="unit-banner" data-motion-item>
+        <span id="map-icon" class="map-icon" aria-hidden="true"></span>
+        <div>
+          <p id="map-unit" class="eyebrow"></p>
+          <h2 id="map-title" tabindex="-1"></h2>
+          <p id="map-description"></p>
+        </div>
+      </header>
+      <p id="map-availability" class="map-availability" role="status"></p>
+      <ol id="level-path" class="level-path" aria-label="{{mapa_camino}}"></ol>
+    </section>
+    <aside class="level-card" aria-labelledby="level-title" data-motion-item>
+      <p id="level-number" class="eyebrow"></p>
+      <h3 id="level-title"></h3>
+      <p id="level-description"></p>
+      <button id="btn-start-level" class="btn btn-primary" disabled>{{mapa_comenzar}}</button>
+      <p class="map-help">{{mapa_ayuda}}</p>
+      <button id="btn-retry-levels" class="btn btn-secondary" hidden>
+        {{reintentar_catalogo}}
+      </button>
+    </aside>
+  </div>
+</main>

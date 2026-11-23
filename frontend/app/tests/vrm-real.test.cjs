@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const THREE = require('three');
 const { VRMHumanoid } = require('@pixiv/three-vrm');
-const { VrmAvatarViewer } = require('./load-ts.cjs')('src/avatar/vrm-loader-spike.ts');
+const { VrmAvatarViewer } = require('./load-ts.cjs')('src/avatar/vrm-avatar-viewer.ts');
 
 test('palma frontal conserva su normal en la jerarquía real de visenia.vrm', () => {
   const bytes = fs.readFileSync(path.join(__dirname, '../public/models/visenia.vrm'));
