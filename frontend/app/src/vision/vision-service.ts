@@ -151,6 +151,7 @@ export class VisionService {
   ): {
     landmarks: HolisticFrameLandmarks;
     encuadreValido: boolean;
+    indicacion?: string;
   } {
     if (!this.isReady || !video || video.readyState < 2) {
       this.resetTracking();
@@ -162,7 +163,6 @@ export class VisionService {
     const result: HolisticFrameLandmarks = {
       imageAspect: video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : 1,
     };
-    let encuadreValido = false;
 
     // 1. Inferencia de Pose
     if (this.poseLandmarker) {
@@ -183,24 +183,6 @@ export class VisionService {
             z: wlm.z,
             visibility: wlm.visibility ?? 1.0,
           }));
-        }
-
-        const nose = result.pose[0];
-        const leftShoulder = result.pose[11];
-        const rightShoulder = result.pose[12];
-
-        if (
-          nose &&
-          leftShoulder &&
-          rightShoulder &&
-          nose.x > 0.15 &&
-          nose.x < 0.85 &&
-          nose.y > 0.1 &&
-          nose.y < 0.85 &&
-          leftShoulder.x > 0.1 &&
-          rightShoulder.x < 0.9
-        ) {
-          encuadreValido = true;
         }
       }
     }
@@ -242,7 +224,7 @@ export class VisionService {
     // 3. Inferencia de Rostro y Blendshapes (Prosoponema)
     if (this.faceLandmarker) {
       const faceResult = this.faceLandmarker.detectForVideo(video, timestamp);
-      if (faceResult.faceLandmarks && faceResult.faceLandmarks.length > 0) {
+      if (faceResult.faceLandmarks?.[0]?.length) {
         const allFacePoints = faceResult.faceLandmarks[0];
 
         // Mapear solo puntos clave de contorno facial para el canvas
@@ -264,28 +246,38 @@ export class VisionService {
       }
     }
 
-    const inside = (p: LandmarkPoint | undefined) =>
-      p && (p.visibility ?? 1) > 0.5 && p.x > 0.05 && p.x < 0.95 && p.y > 0.05 && p.y < 0.95;
-    const izquierda = !!inside(result.leftHand?.[0]);
-    const derecha = !!inside(result.rightHand?.[0]);
-    const manosVisibles = {
-      izquierda,
-      derecha,
-      ambas: izquierda && derecha,
-      cualquiera: izquierda || derecha,
-    };
-    encuadreValido =
-      encuadreValido &&
-      !!result.face?.length &&
-      manosVisibles[manos] &&
-      !!inside(result.pose?.[11]) &&
-      !!inside(result.pose?.[12]);
-    if (!encuadreValido) this.framingSince = null;
+    const dentro = (p?: LandmarkPoint, margenX = 0.05, margenY = margenX) =>
+      p &&
+      (p.visibility ?? 1) > 0.5 &&
+      p.x > margenX &&
+      p.x < 1 - margenX &&
+      p.y > margenY &&
+      p.y < 1 - margenY;
+    const completa = (puntos?: LandmarkPoint[]) =>
+      puntos?.length === 21 && dentro(puntos[0]) && puntos.every((p) => dentro(p, 0));
+    const izquierda = completa(result.leftHand);
+    const derecha = completa(result.rightHand);
+    let indicacion;
+    if (!dentro(result.pose?.[11]) || !dentro(result.pose?.[12]))
+      indicacion = 'Coloca ambos hombros dentro de la imagen.';
+    else if (!result.face?.length || !dentro(result.pose?.[0], 0.15, 0.1))
+      indicacion = 'Centra el rostro en la cámara.';
+    else if (manos === 'cualquiera' && !izquierda && !derecha)
+      indicacion = 'Muestra una mano completa, hasta las puntas de los dedos.';
+    else if (manos === 'ambas' && !izquierda && !derecha)
+      indicacion = 'Muestra las dos manos completas.';
+    else if ((manos === 'ambas' || manos === 'izquierda') && !izquierda)
+      indicacion = 'Coloca toda la mano izquierda dentro de la imagen.';
+    else if ((manos === 'ambas' || manos === 'derecha') && !derecha)
+      indicacion = 'Coloca toda la mano derecha dentro de la imagen.';
+
+    if (indicacion) this.framingSince = null;
     else this.framingSince ??= timestamp;
     if (!result.leftHand && !result.rightHand) this.previousHands = {};
     return {
       landmarks: result,
-      encuadreValido: encuadreValido && timestamp - (this.framingSince ?? timestamp) >= 1000,
+      encuadreValido: this.framingSince !== null && timestamp - this.framingSince >= 1000,
+      indicacion: indicacion ?? 'Mantén el encuadre un segundo.',
     };
   }
 

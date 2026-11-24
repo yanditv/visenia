@@ -75,6 +75,53 @@ def test_isolation_conflicts_pagination_progress_and_exports(practice_client):
     assert client.get("/api/v1/lsec/practicas?limite=1000", headers=KEY).status_code == 422
 
 
+def test_saved_retry_survives_catalog_outage(practice_client, monkeypatch, tmp_path):
+    path = "/api/v1/lsec/practicas"
+    payload = take()
+    saved = practice_client.post(path, headers=KEY, json=payload).raise_for_status().json()
+    monkeypatch.setenv("VISENA_LSEC_CATALOG", str(tmp_path / "ausente.json"))
+
+    assert practice_client.post(path, headers=KEY, json=payload).raise_for_status().json() == saved
+    changed = {**payload, "frames": frames(0.2)}
+    assert practice_client.post(path, headers=KEY, json=changed).status_code == 409
+    assert practice_client.post(path, headers=OTHER, json=payload).status_code == 503
+    assert practice_client.post(path, headers=KEY, json=take()).status_code == 503
+    assert practice_client.get(path, headers=KEY).json()["total"] == 1
+
+
+def test_calibration_explains_fail_despite_passing_average_and_survives_recalibration(
+    practice_client, tmp_path
+):
+    path = tmp_path / "published.json"
+    ref = record("ref-hola")
+    pack(path, ref)
+    payload = take(frames=frames(0.2))
+    base = "/api/v1/lsec/practicas"
+    result = (
+        practice_client.post(base, headers=KEY, json=payload).raise_for_status().json()["resultado"]
+    )
+    audit = result["calibracion_aplicada"]
+    grade = result["ejecucion"]["resultado"]
+    assert grade["puntaje_global"] == audit["puntaje_minimo"] == 75
+    assert not grade["veredicto_aprobado"]
+    assert audit["por_parametro"]["toponema_ubicacion"] == {
+        "verde": 0.03,
+        "rojo": 0.15,
+        "puntaje": 0,
+    }
+    assert audit["aspecto_a_practicar"] == "toponema_ubicacion"
+    assert "prosoponema_no_manual" not in audit["por_parametro"]
+    ref["calibracion"]["umbrales"]["toponema_ubicacion"]["rojo"] = 3
+    pack(path, ref)
+    history = practice_client.get(base, headers=KEY).json()["intentos"]
+    assert history[0]["resultado"] == result
+    fresh = practice_client.post(base, headers=KEY, json=take(frames=frames(0.2))).json()[
+        "resultado"
+    ]
+    assert fresh["ejecucion"]["resultado"]["veredicto_aprobado"]
+    assert fresh["calibracion_aplicada"]["por_parametro"]["toponema_ubicacion"]["rojo"] == 3
+
+
 def test_concurrent_retries_and_insufficient_capture(practice_client):
     client = practice_client
     payload = take()

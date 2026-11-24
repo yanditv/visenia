@@ -140,7 +140,7 @@ def compare_face(
     )
 
 
-def automatic_segment(frames, width, height):
+def automatic_segment(frames, width, height, *, target_hand=None):
     def active(frame, side):
         pose, hand = frame.get("pose"), frame.get(f"mano_{side}")
         if not pose or not hand or min(shoulder["visibility"] for shoulder in pose[11:13]) < 0.5:
@@ -150,7 +150,8 @@ def automatic_segment(frames, width, height):
         return hand[0]["y"] < (left["y"] + right["y"]) / 2 + 0.95 * shoulder_width
 
     ranges = []
-    for side in ("izquierda", "derecha"):
+    sides = (target_hand,) if target_hand in ("izquierda", "derecha") else ("izquierda", "derecha")
+    for side in sides:
         present = [index for index, frame in enumerate(frames) if active(frame, side)]
         groups = []
         for index in present:

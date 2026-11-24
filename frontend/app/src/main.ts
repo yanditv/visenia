@@ -30,6 +30,8 @@ const canvas = document.getElementById('skeleton-canvas') as HTMLCanvasElement;
 const fpsDisplay = document.getElementById('fps-display') as HTMLSpanElement;
 const statusDisplay = document.getElementById('status-display') as HTMLSpanElement;
 const encuadreBox = document.querySelector('.encuadre-box') as HTMLDivElement;
+const avisoEncuadre = document.querySelector<HTMLElement>('.frame-waiting')!;
+const avisoEncuadreInicial = avisoEncuadre.textContent;
 const btnToggleCamera = document.getElementById('btn-toggle-camera') as HTMLButtonElement;
 const btnToggleSynthetic = document.getElementById('btn-toggle-synthetic') as HTMLButtonElement;
 const avatarContainer = document.getElementById('avatar-container') as HTMLDivElement;
@@ -89,10 +91,11 @@ const practicaLsec = new PracticaLsec(
   new VistaResultado(document)
 );
 const reconocimientoLibre = document.getElementById('reconocimiento-libre') as HTMLInputElement;
+const manoPreferida = document.getElementById('preferred-hand') as HTMLSelectElement;
 reconocimientoLibre.addEventListener('change', () => practicaLsec.cancelar());
 probarSena.addEventListener('click', () => {
   const ref = catalogoService.getNivel();
-  const mano = (document.getElementById('preferred-hand') as HTMLSelectElement)?.value;
+  const mano = manoPreferida.value;
   return practicaLsec.activar(
     cameraService.isRunning() &&
       !isSimulating &&
@@ -587,6 +590,7 @@ function animationLoop(timestamp: number) {
 
   let userLandmarks: HolisticFrameLandmarks = {};
   let freshFrame = isSimulating;
+  let indicacion = avisoEncuadreInicial;
 
   // 1. Obtención de landmarks del usuario (cámara o simulación)
   if (isSimulating) {
@@ -598,7 +602,7 @@ function animationLoop(timestamp: number) {
         try {
           const manos = reconocimientoLibre.checked
             ? 'cualquiera'
-            : catalogoService.getSelectedSena()?.mano_dominante;
+            : catalogoService.manoParaEncuadre(manoPreferida.value);
           lastDetection = visionService.detect(
             video,
             timestamp,
@@ -628,6 +632,7 @@ function animationLoop(timestamp: number) {
       }
       const detection = lastDetection;
       userLandmarks = detection.landmarks;
+      indicacion = detection.indicacion ?? avisoEncuadreInicial;
 
       if (detection.encuadreValido) {
         encuadreBox?.classList.add('valido');
@@ -642,6 +647,7 @@ function animationLoop(timestamp: number) {
     encuadreBox?.classList.remove('valido');
   }
 
+  if (avisoEncuadre.textContent !== indicacion) avisoEncuadre.textContent = indicacion;
   if (freshFrame) frameCount++;
   if (!isSimulating) practicaLsec.registrar(userLandmarks, timestamp, freshFrame);
 

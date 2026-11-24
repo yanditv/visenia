@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from app.contracts.lsec import (
     PARAMETERS,
+    AppliedCalibration,
     Attempt,
     Candidate,
     DetectedSegment,
@@ -19,6 +20,7 @@ from app.contracts.lsec import (
     Recognition,
     Result,
     ResultParameter,
+    ScoredThreshold,
     Segment,
     SimilarityGrade,
     Timing,
@@ -32,12 +34,14 @@ class ReferenceUnavailable(Exception):
     pass
 
 
-def segment_capture(attempt: Attempt):
+def segment_capture(attempt: Attempt, *, target_hand=None):
     if attempt.segmentacion is not None:
         raise ValueError("Envíe la captura completa sin un segmento previo.")
     frames = [frame.model_dump(exclude_none=True) for frame in attempt.frames]
     try:
-        start, end, hand = automatic_segment(frames, attempt.ancho, attempt.alto)
+        start, end, hand = automatic_segment(
+            frames, attempt.ancho, attempt.alto, target_hand=target_hand
+        )
     except ValueError:
         return DetectedSegment(estado="datos_insuficientes", segmentacion=None, mano_observada=None)
     return DetectedSegment(
@@ -50,6 +54,7 @@ def segment_capture(attempt: Attempt):
 # Distance giving 50/100 for one track. These geometric scales are shared
 # across the pilot and do not represent specialist-defined passing thresholds.
 SIMILARITY_HALF_DISTANCES = dict(zip(PARAMETERS, (0.10, 0.35, 0.25, 0.25, 0.20), strict=True))
+ENGINE_VERSION = "lsec-dtw-1"
 
 
 def practice_similarity(reference, parameters):
@@ -78,18 +83,24 @@ def practice_similarity(reference, parameters):
 def recognize(attempt: Attempt, catalog: Catalog, segmentar: bool = False):
     if not catalog.references:
         return Recognition(
-            estado="sin_referencias", version_catalogo=catalog.version, candidatas=[]
+            estado="sin_referencias",
+            version_catalogo=catalog.version,
+            version_motor=ENGINE_VERSION,
+            candidatas=[],
         )
     if segmentar:
         detected = segment_capture(attempt)
         if detected.segmentacion is None:
             return Recognition(
-                estado="datos_insuficientes", version_catalogo=catalog.version, candidatas=[]
+                estado="datos_insuficientes",
+                version_catalogo=catalog.version,
+                version_motor=ENGINE_VERSION,
+                candidatas=[],
             )
         attempt = attempt.model_copy(update={"segmentacion": detected.segmentacion})
     tracks = prepare(attempt)
     candidates = []
-    manual_distances = {}
+    candidate_metrics = {}
     for reference in catalog.references.values():
         distances = compare_manual(
             reference.tracks,
@@ -97,8 +108,12 @@ def recognize(attempt: Attempt, catalog: Catalog, segmentar: bool = False):
             reference.hand,
             attempt.mano_practica if reference.allow_hand_switch else None,
         )
+        if reference.facial_required:
+            distances[PARAMETERS[-1]] = compare_face(
+                reference.tracks, tracks, True, reference.facial_keys
+            )
         if all(item.desviacion is not None for item in distances.values()):
-            manual_distances[reference.id] = distances
+            candidate_metrics[reference.id] = distances
             candidates.append(
                 Candidate(
                     id_referencia=reference.id,
@@ -116,12 +131,10 @@ def recognize(attempt: Attempt, catalog: Catalog, segmentar: bool = False):
     similarity = None
     if candidates:
         best = catalog.references[candidates[0].id_referencia]
-        metrics = manual_distances[best.id]
-        if best.facial_required:
-            metrics[PARAMETERS[-1]] = compare_face(best.tracks, tracks, True, best.facial_keys)
-        similarity = practice_similarity(best, metrics)
+        similarity = practice_similarity(best, candidate_metrics[best.id])
     return Recognition(
         estado="experimental" if candidates else "datos_insuficientes",
+        version_motor=ENGINE_VERSION,
         version_catalogo=catalog.version,
         candidatas=candidates[:3],
         similitud=similarity,
@@ -138,7 +151,7 @@ FEEDBACK = (
 
 
 def score(parameters, calibration):
-    scores = []
+    scores = {}
     results = {}
     for name, feedback in zip(PARAMETERS, FEEDBACK):
         metric = parameters[name]
@@ -152,7 +165,11 @@ def score(parameters, calibration):
             continue
         threshold = calibration.umbrales[name]
         distance = metric.desviacion
-        scores.append(distance_score(distance, threshold.verde, threshold.rojo))
+        scores[name] = ScoredThreshold(
+            verde=threshold.verde,
+            rojo=threshold.rojo,
+            puntaje=distance_score(distance, threshold.verde, threshold.rojo),
+        )
         color = (
             "verde"
             if distance <= threshold.verde
@@ -166,15 +183,23 @@ def score(parameters, calibration):
             zonas_resaltar=[] if color == "verde" else metric.zonas_resaltar,
             mensaje_feedback="Dentro del rango de referencia." if color == "verde" else feedback,
         )
-    total = round(mean(scores), 2)
+    total = round(mean(item.puntaje for item in scores.values()), 2)
     passed = total >= calibration.puntaje_minimo and all(
         item.estado != "rojo" for item in results.values()
     )
-    return Result(
+    result = Result(
         puntaje_global=total,
         estrellas=(3 if total >= 95 else 2 if total >= 85 else 1) if passed else 0,
         veredicto_aprobado=passed,
         parametros_evaluados=results,
+    )
+    weakest = min(
+        (name for name in scores if results[name].estado != "verde"),
+        key=lambda name: (results[name].estado != "rojo", scores[name].puntaje),
+        default=None,
+    )
+    return result, AppliedCalibration(
+        puntaje_minimo=calibration.puntaje_minimo, por_parametro=scores, aspecto_a_practicar=weakest
     )
 
 
@@ -183,11 +208,14 @@ def evaluate(attempt: EvaluationAttempt, catalog: Catalog, segmentar: bool = Fal
     if reference is None:
         raise ReferenceUnavailable("referencia_no_disponible")
     start = perf_counter()
+    practice_hand = attempt.mano_practica if reference.allow_hand_switch else None
     if segmentar:
-        detected = segment_capture(attempt)
+        target_hand = "ambas" if reference.hand == "ambas" else practice_hand or reference.hand
+        detected = segment_capture(attempt, target_hand=target_hand)
         if detected.segmentacion is None:
             return Evaluation(
                 estado="datos_insuficientes",
+                version_motor=ENGINE_VERSION,
                 version_catalogo=catalog.version,
                 id_referencia=reference.id,
                 parametros={
@@ -208,7 +236,7 @@ def evaluate(attempt: EvaluationAttempt, catalog: Catalog, segmentar: bool = Fal
         reference.tracks,
         tracks,
         reference.hand,
-        attempt.mano_practica if reference.allow_hand_switch else None,
+        practice_hand,
     )
     facial = compare_face(
         reference.tracks, tracks, reference.facial_required, reference.facial_keys
@@ -217,11 +245,9 @@ def evaluate(attempt: EvaluationAttempt, catalog: Catalog, segmentar: bool = Fal
     has_data &= reference.facial_required is not True or facial.estado == "medido"
     parameters[PARAMETERS[-1]] = facial
     state = "datos_insuficientes" if not has_data else "sin_calibracion"
-    result = (
-        score(parameters, reference.calibration)
-        if has_data and reference.calibration is not None
-        else None
-    )
+    result = applied = None
+    if has_data and reference.calibration is not None:
+        result, applied = score(parameters, reference.calibration)
     latency_ms = round((perf_counter() - start) * 1000, 3)
     execution = None
     if result is not None:
@@ -257,6 +283,8 @@ def evaluate(attempt: EvaluationAttempt, catalog: Catalog, segmentar: bool = Fal
         state = "evaluado"
     return Evaluation(
         estado=state,
+        version_motor=ENGINE_VERSION,
+        calibracion_aplicada=applied,
         version_catalogo=catalog.version,
         id_referencia=attempt.id_referencia,
         parametros=parameters,

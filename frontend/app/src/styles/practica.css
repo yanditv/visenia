@@ -720,6 +720,33 @@
   font-weight: 700;
   color: var(--vs-ok);
 }
+.score-breakdown {
+  grid-column: 1 / -1;
+  min-width: 0;
+  color: var(--vs-ink);
+  font-size: 0.88rem;
+}
+.score-breakdown summary {
+  padding-block: 0.5rem;
+  color: var(--vs-primary);
+  font-weight: 700;
+  cursor: pointer;
+}
+.score-breakdown dl > div {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.6rem;
+  padding-block: 0.3rem;
+  border-bottom: 1px solid var(--vs-line);
+}
+.score-breakdown dd {
+  font-variant-numeric: tabular-nums;
+}
+.score-breakdown p {
+  margin-top: 0.4rem;
+  color: var(--vs-muted);
+}
 .feedback-card {
   align-items: flex-start;
   justify-content: space-between;

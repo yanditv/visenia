@@ -26,10 +26,10 @@
       <button class="text-action" type="button" id="abrir-historial">Ver historial</button>
     </div>
     <div
-      class="journey-grid grid grid-cols-2 gap-3 md:grid-cols-[1.35fr_1fr_1fr]"
+      class="journey-grid grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 lg:grid-cols-4"
       id="journey-grid"
     >
-      <article class="journey-card daily-card col-span-2 md:col-span-1">
+      <article class="journey-card daily-card">
         <div class="flex flex-wrap items-baseline justify-between gap-1">
           <span class="metric-label">Meta diaria</span><strong id="meta-valor">—</strong>
         </div>
@@ -46,8 +46,16 @@
         ><span class="metric-note">Días seguidos de práctica</span>
       </article>
       <article class="journey-card">
-        <span class="metric-label">Experiencia</span><strong id="xp-valor">—</strong
-        ><span class="metric-note">10 XP por intento con nota</span>
+        <div class="flex flex-wrap items-baseline justify-between gap-1">
+          <span class="metric-label" id="nivel-valor">Nivel de práctica</span>
+          <strong id="xp-valor">—</strong>
+        </div>
+        <progress id="nivel-progreso" max="100" value="0" aria-label="Avance de nivel"></progress>
+        <span class="metric-note" id="nivel-nota">10 XP por intento con nota.</span>
+      </article>
+      <article class="journey-card">
+        <span class="metric-label">Reto de vocabulario</span><strong id="reto-valor">—</strong>
+        <span class="metric-note" id="reto-nota">Consigue una nota en distintas señas.</span>
       </article>
     </div>
     <p id="journey-state" class="metric-note" role="status"></p>

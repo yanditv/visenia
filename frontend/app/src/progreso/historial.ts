@@ -1,4 +1,5 @@
 import { clienteLsec } from '../../../../contracts/typescript/cliente-lsec';
+import { crearDesglose } from '../practica/desglose';
 
 const intentosPorPagina = 20;
 const fechaLocal = new Intl.DateTimeFormat('es-EC', {
@@ -58,6 +59,8 @@ export function instalarHistorial(documento: Document, ventana: Window) {
         puntaje.textContent = nota == null ? 'Sin nota' : `${formatoNota.format(nota)}/100`;
         if (nota == null) puntaje.dataset.ungraded = 'true';
         item.append(datos, puntaje);
+        const detalle = crearDesglose(documento, r);
+        if (detalle) item.appendChild(detalle);
         intentos.appendChild(item);
       }
       lista.replaceChildren(intentos);
@@ -127,6 +130,9 @@ export function instalarHistorial(documento: Document, ventana: Window) {
   ventana.addEventListener('visenia:practice-saved', () => {
     if (panel.open) void cargar(0);
     else offset = 0;
+  });
+  ventana.addEventListener('online', () => {
+    if (panel.open) void cargar();
   });
   for (const formato of ['json', 'csv'] as const) {
     const boton = documento.getElementById('historial-' + formato) as HTMLButtonElement;

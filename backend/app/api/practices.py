@@ -20,7 +20,6 @@ from app.contracts.practice import (
     PracticeRecord,
     Progress,
 )
-from app.domain.lsec.lsec_catalog import Catalog
 from app.repositories import practices
 from app.services.feedback import availability, coaching
 from app.services.practice import complete
@@ -29,12 +28,8 @@ router = APIRouter(prefix="/api/v1/lsec", tags=["Historial"], route_class=Landma
 
 
 @router.post("/practicas", response_model=PracticeRecord)
-def practice(
-    attempt: PracticeAttempt,
-    owner: str = Depends(participant),
-    catalog: Catalog = Depends(available_catalog),
-):
-    return complete(attempt, catalog, owner)
+def practice(attempt: PracticeAttempt, owner: str = Depends(participant)):
+    return complete(attempt, owner, available_catalog)
 
 
 @router.get("/practicas", response_model=History)

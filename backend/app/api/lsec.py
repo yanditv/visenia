@@ -50,6 +50,7 @@ def catalog_index(catalog: Catalog = Depends(available_catalog)):
                 video_url=video_url,
                 estado="publicada" if loaded.published else "experimental",
                 calibrada=loaded.calibration is not None,
+                permite_alternancia_manual=loaded.allow_hand_switch,
             )
         )
     return CatalogIndex(version_catalogo=catalog.version, referencias=rows)

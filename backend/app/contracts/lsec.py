@@ -185,6 +185,7 @@ class SimilarityGrade(ContractModel):
 
 class Recognition(ContractModel):
     estado: Literal["experimental", "datos_insuficientes", "sin_referencias"]
+    version_motor: str | None = None
     version_catalogo: str | None
     candidatas: list[Candidate]
     similitud: SimilarityGrade | None = None
@@ -228,9 +229,21 @@ class Execution(ContractModel):
     frames_ejecucion: list[Frame]
 
 
+class ScoredThreshold(Threshold):
+    puntaje: Number = Field(ge=0, le=100)
+
+
+class AppliedCalibration(ContractModel):
+    puntaje_minimo: Number = Field(ge=0, le=100)
+    por_parametro: dict[Parameter, ScoredThreshold]
+    aspecto_a_practicar: Parameter | None
+
+
 class Evaluation(ContractModel):
     estado: Literal["evaluado", "sin_calibracion", "datos_insuficientes"]
     version_catalogo: str
+    version_motor: str | None = None
+    calibracion_aplicada: AppliedCalibration | None = None
     id_referencia: ReferenceId
     parametros: dict[Parameter, Distance]
     ejecucion: Execution | None
@@ -246,6 +259,7 @@ class CatalogEntry(ContractModel):
     video_url: str | None
     estado: Literal["pendiente_referencia", "experimental", "publicada"]
     calibrada: bool
+    permite_alternancia_manual: bool = False
 
 
 class CatalogIndex(ContractModel):

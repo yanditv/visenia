@@ -263,6 +263,24 @@ test('el encuadre requiere un segundo continuo y reinicia al interrumpir el víd
   assert.equal(v.detect(video, 1200).encuadreValido, false);
   assert.equal(v.detect(video, 5000).encuadreValido, false);
 });
+
+test('un dedo recortado identifica la mano y reinicia el segundo de encuadre', () => {
+  const derecha = hand(0.2), izquierda = hand(0.8);
+  const v = detector([derecha, izquierda]);
+  v.faceLandmarker = {
+    detectForVideo: () => ({ faceLandmarks: [Array.from({ length: 478 }, () => point(0.5, 0.4))] }),
+  };
+  const video = { readyState: 2 };
+  for (let t = 0; t <= 1000; t += 100) v.detect(video, t);
+  derecha[8].x = -0.01;
+  const recorte = v.detect(video, 1100);
+  assert.equal(recorte.encuadreValido, false);
+  assert.match(recorte.indicacion, /mano derecha/);
+  derecha[8].x = 0.2;
+  assert.equal(v.detect(video, 1200).encuadreValido, false);
+  for (let t = 1300; t < 2200; t += 100) v.detect(video, t);
+  assert.equal(v.detect(video, 2200).encuadreValido, true);
+});
 test('la respuesta del brazo depende del tiempo y conserva su velocidad a 30 y 120 fps', (t) => {
   let scheduled;
   global.requestAnimationFrame = (callback) => {

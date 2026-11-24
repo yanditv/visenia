@@ -99,6 +99,14 @@ export type Ejecucion = {
 };
 
 export type Evaluacion = {
+  version_motor?: string | null;
+  calibracion_aplicada?: {
+    puntaje_minimo: number;
+    aspecto_a_practicar: Parametro | null;
+    por_parametro: Partial<
+      Record<Parametro, { verde: number; rojo: number; puntaje: number }>
+    >;
+  } | null;
   similitud?: Similitud | null;
   estado: "evaluado" | "sin_calibracion" | "datos_insuficientes";
   version_catalogo: string;
@@ -109,6 +117,7 @@ export type Evaluacion = {
 };
 
 export type Reconocimiento = {
+  version_motor?: string | null;
   similitud?: Similitud | null;
   estado: "experimental" | "datos_insuficientes" | "sin_referencias";
   version_catalogo: string | null;
@@ -139,6 +148,7 @@ export type CatalogoLsec = {
     video_url: string | null;
     estado: "pendiente_referencia" | "experimental" | "publicada";
     calibrada: boolean;
+    permite_alternancia_manual?: boolean;
   }[];
 };
 

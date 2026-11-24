@@ -73,3 +73,30 @@ test('muestra la nota persistida y reintenta con el mismo identificador', async 
   assert.match(salida.textContent, /guardado/);
   assert.ok(practica.colores.has('mano_derecha'));
 });
+
+test('una toma rechazada permite volver a grabar con otro identificador', async (t) => {
+  t.mock.method(performance, 'now', () => 0);
+  for (const [status, texto] of [
+    [404, /otra seña/], [409, /nueva toma/], [413, /más corta/], [422, /grabar/],
+  ]) {
+    const boton = {}, salida = {};
+    const practica = new PracticaLsec(boton, salida);
+    const ids = [];
+    practica.api = {
+      practicar: async (toma) => {
+        ids.push(toma.id_intento);
+        if (ids.length === 1) throw Object.assign(new Error(), { status });
+        return resultado;
+      },
+    };
+    capturar(practica);
+    await practica.activar(true, 640, 480);
+    assert.equal(boton.textContent, 'Probar seña');
+    assert.match(salida.textContent, texto);
+    capturar(practica);
+    await practica.activar(true, 640, 480);
+    assert.equal(ids.length, 2);
+    assert.notEqual(ids[0], ids[1]);
+    assert.match(salida.textContent, /guardado/);
+  }
+});

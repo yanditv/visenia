@@ -1,15 +1,17 @@
 """Compute and atomically persist idempotent practice results."""
 
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime
 from hashlib import sha256
 
 from app.contracts.lsec import Attempt, EvaluationAttempt
 from app.domain.lsec.evaluation import evaluate, recognize
+from app.domain.lsec.lsec_catalog import Catalog
 from app.repositories import practices
 
 
-def complete(attempt, catalog, owner):
+def complete(attempt, owner, load_catalog: Callable[[], Catalog]):
     payload = attempt.model_dump(mode="json")
     fingerprint = sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
@@ -17,6 +19,7 @@ def complete(attempt, catalog, owner):
     previous = practices.find(str(attempt.id_intento), owner, fingerprint)
     if previous is not None:
         return previous
+    catalog = load_catalog()
     # save() arbitrates concurrent retries, including retries from another worker.
     capture = attempt.model_dump(exclude={"id_intento", "id_referencia", "segmentar"})
     if attempt.id_referencia:

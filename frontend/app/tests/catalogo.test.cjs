@@ -228,6 +228,7 @@ test('el catálogo prioriza publicaciones y recupera la última copia válida si
   const stored = new Map();
   t.mock.method(global, 'fetch', async (url) => {
     if (!online) throw new TypeError('sin red');
+    if (url.endsWith('/catalogo')) return Response.json({ referencias: {} });
     return Response.json(url === '/api/v1/lsec/referencias' ? active : references);
   });
   const previous = global.caches;
@@ -245,12 +246,27 @@ test('el catálogo prioriza publicaciones y recupera la última copia válida si
   let active = [references[1]];
   const service = new CatalogoPlayerService();
   assert.deepEqual(await service.loadCatalog(), active);
+  const valid = active;
+  active = [{ id: 'ref-incompleta' }];
+  assert.deepEqual(await service.loadCatalog(), valid);
   online = false;
-  assert.deepEqual(await service.loadCatalog(), active);
+  assert.deepEqual(await service.loadCatalog(), valid);
   online = true;
   active = [];
   assert.deepEqual(await service.loadCatalog(), references);
   assert.deepEqual(await stored.get('/api/v1/lsec/referencias').json(), []);
+});
+
+test('un índice experimental válido sigue disponible si las dos listas de reproducción fallan', async (t) => {
+  const nivel = { id: 'ref-azul', glosa: 'AZUL', unidad_tematica: 3, estado: 'experimental' };
+  t.mock.method(global, 'fetch', async (url) =>
+    url.endsWith('/catalogo')
+      ? Response.json({ referencias: [nivel] })
+      : new Response('<html>Sin datos</html>')
+  );
+  const service = new CatalogoPlayerService();
+  assert.deepEqual(await service.loadCatalog(), [nivel]);
+  assert.equal(service.getIsLoaded(), true);
 });
 
 test('los niveles experimentales cargan la guía elegida sin sustituir una selección posterior', async (t) => {
@@ -276,4 +292,17 @@ test('los niveles experimentales cargan la guía elegida sin sustituir una selec
   await primera;
   assert.equal(service.getSelectedSena().id, 'ref-azul');
   assert.equal(service.getSelectedSena().frames.length, references[0].frames.length);
+});
+
+test('la mano preferida solo cambia el encuadre de referencias alternables de una mano', async (t) => {
+  const publicadas = references.map((r, i) => ({ ...r, mano_dominante: i === 2 ? 'ambas' : 'derecha' }));
+  t.mock.method(global, 'fetch', async (url) => Response.json(url.endsWith('/catalogo')
+    ? { referencias: publicadas.map((r, i) => ({ id: r.id, estado: 'publicada', permite_alternancia_manual: i !== 1 })) }
+    : publicadas));
+  const service = new CatalogoPlayerService();
+  await service.loadCatalog();
+  for (const [i, esperada] of ['izquierda', 'derecha', 'ambas'].entries()) {
+    service.selectSena(publicadas[i].id);
+    assert.equal(service.manoParaEncuadre('izquierda'), esperada);
+  }
 });

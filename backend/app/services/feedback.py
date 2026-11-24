@@ -32,6 +32,14 @@ def coaching(document):
     observation = (
         grade["mensaje_feedback"] or "Repite la seña a velocidad normal y compárala con la guía."
     )
+    if applied := result.get("calibracion_aplicada"):
+        weakest = applied["aspecto_a_practicar"]
+        if weakest:
+            observation = result["ejecucion"]["resultado"]["parametros_evaluados"][weakest][
+                "mensaje_feedback"
+            ]
+        else:
+            observation = "Todos los aspectos medidos están dentro del rango de referencia."
     fallback = Feedback(fuente="reglas", estado="sin_clave", consejo=observation)
     attempt_id = document["id_intento"]
     saved = cache.find(attempt_id)

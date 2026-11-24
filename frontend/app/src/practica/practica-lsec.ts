@@ -9,6 +9,13 @@ import type {
 import type { VistaResultado } from './resultado';
 import type { HolisticFrameLandmarks } from '../render/skeleton-renderer';
 
+const erroresDeToma = new Map([
+  [404, 'La referencia ya no está disponible. Elige otra seña para practicar.'],
+  [409, 'El identificador de esta toma ya está en uso. Inicia una nueva toma.'],
+  [413, 'La toma supera el tamaño permitido. Graba una toma más corta.'],
+  [422, 'El servidor no pudo validar la toma. Vuelve a grabar la seña.'],
+]);
+
 export class PracticaLsec {
   readonly colores = new Map<Zona, string>();
   private readonly api = clienteLsec();
@@ -158,10 +165,14 @@ export class PracticaLsec {
       this.vista?.mostrar(guardada);
       if (typeof window !== 'undefined')
         window.dispatchEvent?.(new Event('visenia:practice-saved'));
-    } catch {
+    } catch (error) {
       if (!control.signal.aborted) {
         this.vista?.limpiar('error');
+        const status = error instanceof Error && 'status' in error ? error.status : undefined;
+        const mensaje = typeof status === 'number' ? erroresDeToma.get(status) : undefined;
+        if (mensaje) this.reintento = undefined;
         this.salida.textContent =
+          mensaje ??
           'No se pudo completar el guardado. Pulsa Reintentar para enviar la misma toma.';
       }
     } finally {

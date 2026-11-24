@@ -254,6 +254,7 @@ export function evaluarLocal(
       (i < 4 || plantilla.rostro_requerido === true),
   );
   const resultado: Evaluacion = {
+    version_motor: "lsec-dtw-1",
     estado: incompleto ? "datos_insuficientes" : "sin_calibracion",
     version_catalogo: plantilla.version_catalogo,
     id_referencia: plantilla.id_referencia,
@@ -290,7 +291,9 @@ export function evaluarLocal(
   const evaluados = {} as NonNullable<
     Evaluacion["ejecucion"]
   >["resultado"]["parametros_evaluados"];
-  const scores: number[] = [];
+  const partes: NonNullable<
+    Evaluacion["calibracion_aplicada"]
+  >["por_parametro"] = {};
   for (const [i, key] of parametros.entries()) {
     const metrica = mediciones[key],
       d = metrica.desviacion;
@@ -308,8 +311,9 @@ export function evaluarLocal(
       throw new Error("Calibración incompleta.");
     const estado =
       d <= limites.verde ? "verde" : d >= limites.rojo ? "rojo" : "amarillo";
-    scores.push(
-      redondear(
+    partes[key] = {
+      ...limites,
+      puntaje: redondear(
         Math.min(
           100,
           Math.max(
@@ -319,7 +323,7 @@ export function evaluarLocal(
         ),
         2,
       ),
-    );
+    };
     evaluados[key] = {
       estado,
       desviacion: d,
@@ -328,6 +332,7 @@ export function evaluarLocal(
         estado === "verde" ? "Dentro del rango de referencia." : consejos[i],
     };
   }
+  const scores = Object.values(partes).map((p) => p.puntaje);
   const total = redondear(scores.reduce((s, x) => s + x, 0) / scores.length, 2);
   const aprobado =
     total >= cal.puntaje_minimo &&
@@ -336,6 +341,18 @@ export function evaluarLocal(
     fin = user[user.length - 1].timestamp_ms;
   const visibles = user.filter((f) => hombros(f, intento));
   resultado.estado = "evaluado";
+  const pendientes = parametros.filter((p) => evaluados[p].estado !== "verde");
+  pendientes.sort(
+    (a, b) =>
+      Number(evaluados[b].estado === "rojo") -
+        Number(evaluados[a].estado === "rojo") ||
+      partes[a]!.puntaje - partes[b]!.puntaje,
+  );
+  resultado.calibracion_aplicada = {
+    puntaje_minimo: cal.puntaje_minimo,
+    por_parametro: partes,
+    aspecto_a_practicar: pendientes[0] ?? null,
+  };
   resultado.latencia_ms = redondear(performance.now() - start, 3);
   resultado.ejecucion = {
     schema_version: "1.1.0",

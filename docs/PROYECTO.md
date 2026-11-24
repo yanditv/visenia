@@ -58,9 +58,11 @@ MediaPipe se ejecuta en el navegador y produce puntos de manos y pose y coeficie
 
 El cliente envía los puntos a POST /api/v1/lsec/practicas. El backend segmenta el gesto, normaliza posiciones por el ancho de hombros y compara trayectorias con DTW. La práctica dirigida compara con el ID elegido. El modo libre ordena hasta tres coincidencias. La configuración de dedos y la orientación se comparan junto con posición y recorrido. La expresión facial interviene cuando una referencia define ese requisito.
 
-El servicio calcula la nota, guarda el resultado en una transacción y responde. El navegador comunica el guardado y actualiza el historial. Ante un fallo, **Reintentar** reenvía la misma toma y el mismo identificador. Salir de la práctica descarta el reintento en memoria. Si la primera respuesta se perdió después de confirmar la transacción, el servidor devuelve el registro guardado.
+El servicio calcula la nota, guarda el resultado en una transacción y responde. Si se pierde la conexión, **Reintentar** reenvía la misma toma y el mismo identificador. Si el intento ya está guardado, el servidor devuelve su resultado aunque el catálogo esté temporalmente fuera de servicio. Salir de la práctica descarta la toma en memoria.
 
-El reproductor y el espejo pueden utilizar recursos ya almacenados sin red. Comparar y guardar una práctica necesita el backend accesible. El motor TypeScript permanece como implementación de referencia para paridad y consumidores locales.
+Si la toma supera el tamaño permitido o contiene datos inválidos, la pantalla explica el rechazo y permite grabar otra. Al recuperar la conexión, el navegador actualiza la meta diaria, la racha, los XP y el historial que esté abierto.
+
+El reproductor y el espejo pueden utilizar recursos ya almacenados sin red. El reproductor valida las referencias publicadas antes de guardarlas en el navegador. Si la descarga falla o llega dañada, intenta abrir la última copia válida. Comparar y guardar una práctica necesita el backend accesible. El motor TypeScript permanece como implementación de referencia para paridad y consumidores locales.
 
 ## Calificación
 
@@ -83,6 +85,10 @@ Los JSON y CSV exportados incluyen resultados y métricas. Las exportaciones se 
 ## Experiencia de práctica
 
 Cada intento guardado con nota suma 10 XP. Una captura insuficiente queda registrada sin sumar puntos. La meta diaria cuenta tres intentos calificados. La racha se calcula con los días consecutivos de práctica en la hora del Ecuador continental. El mapa muestra la mejor nota por seña y el inicio sugiere la próxima seña sin calificación.
+
+El nivel de práctica empieza en 1 y sube cada 100 XP. El reto de vocabulario reconoce la primera seña con nota y los hitos de 5, 10, 20 y 40 señas distintas. Repetir una seña suma experiencia y cuenta una sola vez para el reto. El progreso incluye las prácticas anteriores de ese navegador.
+
+El espejo indica si necesitas centrar el rostro, mostrar ambos hombros o meter una mano completa en la imagen. Comprueba los 21 puntos de cada mano requerida y pide un segundo de encuadre continuo. En las prácticas dirigidas de una mano, la segmentación busca el tramo de la mano que corresponde a la referencia o la alternativa permitida.
 
 El resultado presenta primero el consejo del evaluador. **Ampliar con Groq** envía el modo de práctica, el parámetro que conviene practicar y la observación del evaluador para generar un consejo breve en español. El evaluador local calcula el puntaje y la clasificación. La consulta requiere la credencial del navegador y se reserva por intento para evitar solicitudes simultáneas. El consejo generado se guarda y se reutiliza. Si Groq devuelve un error o se alcanza el límite de uso, se conserva el consejo local y se puede volver a solicitar después de un minuto.
 
@@ -164,6 +170,27 @@ bun contracts/typescript/verificar-lote.ts https://localhost
 ~~~
 
 El ensayo debe reconocer y calificar las 40 referencias al reinyectar sus propios puntos, con coincidencia entre motores. Ese resultado comprueba la integración y necesita complementarse con muestras de otros señantes para medir exactitud.
+
+### Validación con capturas independientes
+
+Para medir el reconocimiento libre, reúne tomas de señantes distintos de quienes aportaron las plantillas o la calibración. Pide a una persona competente en LSEC que etiquete la seña realizada antes de consultar las sugerencias del motor. Cada archivo contiene una toma en formato `Intento` de la API. Usa tomas completas para evaluar también la segmentación automática. Una toma con segmento explícito evalúa el reconocimiento en ese intervalo.
+
+Prepara un manifiesto JSON con rutas relativas al manifiesto. Usa `null` para un movimiento que el catálogo no contiene.
+
+```json
+[
+  {"archivo": "tomas/hola-01.json", "esperada": "ref-hola"},
+  {"archivo": "tomas/fuera-01.json", "esperada": null}
+]
+```
+
+Desde `backend`, ejecuta el validador con la misma configuración de catálogo que la API.
+
+```powershell
+./.venv/Scripts/python.exe -m scripts.validar_reconocimiento ruta/al/manifiesto.json
+```
+
+El informe identifica las versiones de motor y catálogo. Calcula la fracción de señas conocidas que aparecen en primera posición y entre las tres sugerencias. El denominador incluye las tomas conocidas que quedaron sin candidatas. También informa los recuentos por seña, las confusiones y cuántas tomas ajenas recibieron una sugerencia. El reconocimiento libre actual propone la coincidencia más cercana cuando hay señales medibles. Conviene leer los resultados de tomas ajenas junto con la exactitud y el número de muestras por seña.
 
 ## Referencias nuevas
 

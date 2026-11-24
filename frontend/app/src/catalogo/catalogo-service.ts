@@ -23,8 +23,16 @@ type Guia = Pick<
   'id' | 'glosa' | 'frames' | 'segmentacion' | 'mano_dominante'
 > & {
   metadatos_grabacion: { fps: number };
+  permite_alternancia_manual?: boolean;
   parametros_fonologicos?: ReferenciaSenaData['parametros_fonologicos'];
 };
+
+async function leerCatalogo(response: Response): Promise<ReferenciaSenaData[]> {
+  if (!response.ok) throw new Error(`Error HTTP ${response.status} al cargar catálogo de señas.`);
+  const rows: unknown = await response.json();
+  validateCatalog(rows);
+  return rows;
+}
 
 export class CatalogoPlayerService {
   private catalogo: Nivel[] = [];
@@ -44,21 +52,16 @@ export class CatalogoPlayerService {
       typeof caches === 'undefined'
         ? undefined
         : await caches.open('lsec-referencias-publicadas-v1').catch(() => undefined);
-    let response: Response | undefined;
     try {
-      response = await fetch(url, { signal: AbortSignal.timeout(4000), cache: 'no-store' });
+      const response = await fetch(url, { signal: AbortSignal.timeout(4000), cache: 'no-store' });
+      const backup = cache ? response.clone() : undefined;
+      const rows = await leerCatalogo(response);
+      if (cache && backup) await cache.put(url, backup).catch(() => undefined);
+      return rows;
     } catch {
-      // Una sesión sin red puede reproducir la última publicación verificada.
+      const backup = await cache?.match(url).catch(() => undefined);
+      return backup ? leerCatalogo(backup).catch(() => []) : [];
     }
-    if (!response?.ok || response.headers?.get('content-type')?.includes('text/html')) {
-      response = await cache?.match(url).catch(() => undefined);
-      if (!response) return [];
-    }
-    const backup = cache ? response.clone() : undefined;
-    const rows: unknown = await response.json();
-    validateCatalog(rows);
-    if (cache && backup) await cache.put(url, backup).catch(() => undefined);
-    return rows;
   }
 
   public async loadCatalog(url?: string): Promise<Nivel[]> {
@@ -69,20 +72,29 @@ export class CatalogoPlayerService {
             this.publishedCatalog(),
             this.api.catalogo(AbortSignal.timeout(10000)).catch(() => undefined),
           ]);
-      const drafts = index?.referencias?.filter((r) => r.estado === 'experimental') ?? [];
-      let data: unknown = published;
-      if (Array.isArray(data) && !data.length) {
+      const entradas = Array.isArray(index?.referencias) ? index.referencias : [];
+      const drafts = entradas.filter((r) => r?.estado === 'experimental');
+      const alternables = new Set<string>(
+        entradas
+          .filter((r) => r?.estado === 'publicada' && r.permite_alternancia_manual)
+          .map((r) => r.id)
+      );
+      let data = published;
+      if (!data.length) {
         try {
-          const res = await fetch(url ?? '/data/referencias-v1.json');
-          if (!res.ok) throw new Error(`Error HTTP ${res.status} al cargar catálogo de señas.`);
-          data = await res.json();
+          const res = await fetch(url ?? '/data/referencias-v1.json', {
+            signal: AbortSignal.timeout(10000),
+          });
+          data = await leerCatalogo(res);
         } catch (error) {
           if (!drafts.length) throw error;
         }
       }
-      validateCatalog(data);
       const ids = new Set(drafts.map((r) => String(r.id)));
-      this.catalogo = [...data.filter((r) => !ids.has(r.id)), ...drafts];
+      const guias = data
+        .filter((r) => !ids.has(r.id))
+        .map((r) => (alternables.has(r.id) ? { ...r, permite_alternancia_manual: true } : r));
+      this.catalogo = [...guias, ...drafts];
       this.nivel = null;
       this.selectedSena = null;
       this.isPlaying = false;
@@ -137,6 +149,17 @@ export class CatalogoPlayerService {
     return this.selectedSena;
   }
 
+  public manoParaEncuadre(preferencia: string) {
+    const guia = this.selectedSena;
+    if (
+      guia?.permite_alternancia_manual &&
+      guia.mano_dominante !== 'ambas' &&
+      (preferencia === 'izquierda' || preferencia === 'derecha')
+    )
+      return preferencia;
+    return guia?.mano_dominante;
+  }
+
   public getNivel() {
     return this.nivel;
   }
@@ -152,6 +175,7 @@ export class CatalogoPlayerService {
       id: nivel.id,
       glosa: nivel.glosa,
       mano_dominante: plantilla.mano_dominante,
+      permite_alternancia_manual: plantilla.permite_alternancia_manual,
       frames: frames.map((f) => ({ ...f, image_aspect: f.image_aspect ?? ancho / alto })),
       segmentacion: segmentacion ?? { frame_inicio_sena: 0, frame_fin_sena: last },
       metadatos_grabacion: {

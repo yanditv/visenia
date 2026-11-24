@@ -63,9 +63,13 @@ GET /feedback/estado indica si hay una clave configurada en `groq_disponible`. L
 
 El objeto similitud incluye ID de referencia, glosa, puntaje de 0 a 100, notas por parámetro, consejo y zonas a resaltar. La fórmula y sus escalas están descritas en [Proyecto](PROYECTO.md).
 
+Las evaluaciones y los reconocimientos nuevos incluyen `version_motor` junto a `version_catalogo`. La versión inicial del algoritmo identificada en los resultados es `lsec-dtw-1`. Al modificar la extracción de características, las escalas, el orden de las candidatas o la regla de calificación, actualiza el identificador en ambos motores y ejecuta la prueba de paridad.
+
+Una evaluación calibrada incluye `calibracion_aplicada`. El campo `puntaje_minimo` conserva el mínimo de la referencia y `por_parametro` contiene los umbrales `verde` y `rojo` y el `puntaje` que aportó cada aspecto al promedio. Las desviaciones medidas están en `parametros`. El campo `aspecto_a_practicar` prioriza una zona roja y, dentro de la misma categoría, el menor puntaje. Si todos los aspectos están en verde, su valor es nulo. El historial y la exportación JSON conservan estos valores aunque cambie el catálogo. Para intentos anteriores, los clientes deben admitir que la versión del motor y el desglose calibrado estén ausentes o sean nulos.
+
 Una evaluación tiene estado evaluado, sin_calibracion o datos_insuficientes. El estado sin_calibracion puede incluir una nota geométrica. El campo ejecucion.resultado aparece al existir calibración educativa. Una captura insuficiente devuelve similitud y ejecución nulas.
 
-El reconocimiento tiene estado experimental, datos_insuficientes o sin_referencias. Las candidatas se ordenan por distancia normalizada ascendente. El modo libre necesita medir también movimientos ajenos al catálogo para evaluar el rechazo de señas desconocidas.
+El reconocimiento tiene estado experimental, datos_insuficientes o sin_referencias. Las candidatas se ordenan por la distancia normalizada media de sus parámetros aplicables. Para referencias con expresión facial obligatoria, el cálculo incluye sus coeficientes faciales. Solo participan referencias con cobertura suficiente en todos sus parámetros requeridos. El modo libre necesita medir también movimientos ajenos al catálogo para evaluar el rechazo de señas desconocidas.
 
 ## Referencias publicadas
 

@@ -208,13 +208,61 @@ def test_missing_required_face_and_sparse_tracking_are_not_failed_verdicts(clien
     assert result["parametros"][PARAMETERS[-1]]["zonas_resaltar"] == ["rostro"]
     assert result["similitud"] is None
     recognized = api.post("/api/v1/lsec/reconocimientos", json=attempt(frames(face=False))).json()
-    assert recognized["candidatas"] and recognized["similitud"] is None
+    assert recognized["estado"] == "datos_insuficientes"
+    assert recognized["candidatas"] == [] and recognized["similitud"] is None
     assert result["ejecucion"] is None
     track = frames()
     for index, frame in enumerate(track):
         frame["timestamp_ms"] = index * 400
     recognition = api.post("/api/v1/lsec/reconocimientos", json=attempt(track)).json()
     assert recognition["estado"] == "datos_insuficientes"
+
+
+def test_free_recognition_distinguishes_required_facial_expressions(client):
+    api, path = client
+    different = record("ref-a", required_face=True)
+    for frame in different["referencia"]["frames"]:
+        frame["blendshapes_rostro"]["jawOpen"] = 0.8
+    pack(path, different, record("ref-b", required_face=True), record("ref-c", offset=0.1))
+    route = "/api/v1/lsec/reconocimientos?segmentar=true"
+    ranked = api.post(route, json=attempt()).raise_for_status().json()
+    assert ranked["similitud"]["id_referencia"] == "ref-b"
+    assert ranked["candidatas"][0]["distancia"] == 0
+    assert ranked["candidatas"][-1]["id_referencia"] == "ref-a"
+    assert ranked["candidatas"][-1]["distancia"] == pytest.approx(0.6)
+    missing = api.post(route, json=attempt(frames(face=False))).raise_for_status().json()
+    assert [row["id_referencia"] for row in missing["candidatas"]] == ["ref-c"]
+
+
+@pytest.mark.parametrize("side", ["derecha", "izquierda"])
+def test_guided_segmentation_uses_the_practicing_hand(client, side):
+    api, path = client
+    reference = record("ref-hola")
+    reference["permite_alternancia_manual"] = side == "izquierda"
+    pack(path, reference)
+    index = api.get("/api/v1/lsec/catalogo").raise_for_status().json()
+    entry = next(row for row in index["referencias"] if row["id"] == "ref-hola")
+    assert entry["permite_alternancia_manual"] == (side == "izquierda")
+    other = "izquierda" if side == "derecha" else "derecha"
+    take = frames() + frames() + frames()
+    for i, frame in enumerate(take):
+        points = frame.pop("mano_derecha")
+        frame["frame_idx"] = i
+        frame["timestamp_ms"] = i * 40
+        frame[f"mano_{other}"] = points
+        if 8 <= i < 16:
+            frame[f"mano_{side}"] = points
+    result = (
+        api.post(
+            "/api/v1/lsec/evaluaciones?segmentar=true",
+            json=attempt(take, id_referencia="ref-hola", mano_practica=side),
+        )
+        .raise_for_status()
+        .json()
+    )
+    assert result["estado"] == "evaluado"
+    signal = result["ejecucion"]["senales_segmentacion"]
+    assert (signal["timestamp_inicio_sena"], signal["timestamp_fin_sena"]) == (320, 600)
 
 
 def test_validation_rejects_video_and_time_errors_without_echoing_capture(client):
@@ -308,6 +356,8 @@ def test_typescript_engine_matches_http_verdict_and_distances(client):
     for take, local in zip(takes, json.loads(command.stdout), strict=True):
         server = api.post("/api/v1/lsec/evaluaciones", json=take).json()
         assert local["estado"] == server["estado"]
+        assert local["version_motor"] == server["version_motor"]
+        assert local.get("calibracion_aplicada") == server.get("calibracion_aplicada")
         for key, metric in server["parametros"].items():
             actual = local["parametros"][key]
             assert (

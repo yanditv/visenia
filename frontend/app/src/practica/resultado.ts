@@ -1,4 +1,5 @@
 import { clienteLsec } from '../../../../contracts/typescript/cliente-lsec';
+import { crearDesglose } from './desglose';
 import type {
   Feedback,
   PracticaGuardada,
@@ -35,6 +36,7 @@ export class VistaResultado {
     this.solicitud?.abort();
     this.panel.dataset.state = estado;
     this.gauge.hidden = true;
+    this.doc.getElementById('practice-breakdown')!.replaceChildren();
     this.xp.hidden = true;
     this.doc.getElementById('practice-announcement')!.textContent = '';
     this.coach.hidden = true;
@@ -48,6 +50,8 @@ export class VistaResultado {
     const ejecucion = 'ejecucion' in resultado ? resultado.ejecucion : null;
     const nota = ejecucion?.resultado.puntaje_global ?? resultado.similitud?.puntaje;
     if (nota === undefined) return;
+    const detalle = crearDesglose(this.doc, resultado);
+    if (detalle) this.doc.getElementById('practice-breakdown')!.appendChild(detalle);
     this.gauge.hidden = false;
     this.doc.getElementById('practice-score')!.textContent = nota.toLocaleString('es-EC');
     this.xp.hidden = false;
@@ -55,9 +59,14 @@ export class VistaResultado {
     this.doc.getElementById('practice-announcement')!.textContent =
       `Puntaje de ${nota} sobre 100. Ganaste 10 puntos de experiencia.`;
     this.coach.hidden = false;
+    const aplicada = 'calibracion_aplicada' in resultado ? resultado.calibracion_aplicada : null;
     const consejoLocal =
-      resultado.similitud?.mensaje_feedback ||
-      'Repite la seña a velocidad normal y compárala con la guía.';
+      aplicada && ejecucion
+        ? aplicada.aspecto_a_practicar
+          ? ejecucion.resultado.parametros_evaluados[aplicada.aspecto_a_practicar].mensaje_feedback
+          : 'Todos los aspectos medidos están dentro del rango de referencia.'
+        : resultado.similitud?.mensaje_feedback ||
+          'Repite la seña a velocidad normal y compárala con la guía.';
     this.texto.textContent = consejoLocal;
     if (!resultado.similitud) return;
     const control = new AbortController();
